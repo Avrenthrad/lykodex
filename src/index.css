@@ -10715,6 +10715,25 @@ html[data-mode="light"] .overview-tile {
   color: var(--text-tertiary);
 }
 
+/* Scrub read-out for PriceHistoryChart's full (non-compact) mode —
+   floats over the plot, positioned by the component in JS. */
+.price-history-chart__pill {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+
 .price-watch-row {
   cursor: pointer;
 }
