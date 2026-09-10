@@ -1,17 +1,35 @@
 // Overview "Right now" stock-style chart — multi-series mastery /
-// hours view: gold area for you, green lines per friend, red lines
+// hours view: a sky area for you, lime lines per friend, rose lines
 // per guildmate. User picks the metric and range; data regrows on change.
 // See DESIGN_TOKENS.md `stock-style` and lib/overviewChartData.js.
+//
+// "You" is the primary series and uses --sky, not gold: DESIGN_TOKENS
+// reserves --accent (gold) for interactive UI only, never a plotted
+// line. Gold stays on the active range chip and the plot glow's warm
+// edge only.
+//
+// On top of the base stock-style pattern this adds, matching
+// docs/design-drafts/lykodex-chart-system.md and PriceHistoryChart.jsx:
+//  - a headline value + change for your own line over the selected
+//    range, which tracks the crosshair while you scrub;
+//  - a floating date/value pill on scrub (subscribeCrosshairMove);
+//  - the range's real high/low as two dashed price lines
+//    (series.createPriceLine), axis-labelled by the library itself.
 
-import { useEffect, useRef, useState } from "react";
-import { createChart, AreaSeries, LineSeries } from "lightweight-charts";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createChart, AreaSeries, LineSeries, LineStyle, LineType } from "lightweight-charts";
 import { CHART_RANGES, loadOverviewChartData, rangeToDays } from "../lib/overviewChartData";
 
-const GOLD = "#D4AF37";
-const GOLD_FILL = "rgba(212, 175, 55, 0.34)";
-const LIME = "#84cc16";
+// Mirror the DESIGN_TOKENS values; lightweight-charts paints to a
+// canvas so it can't read the CSS custom properties directly.
+const SKY = "#5AA9E6";
+const SKY_FILL_TOP = "rgba(90, 169, 230, 0.30)";
+const SKY_FILL_BOTTOM = "rgba(90, 169, 230, 0)";
+const LIME = "#8FC33D";
 const ROSE = "#E8637D";
-const GROW_MS = 1500;
+const PLOT_BG = "#0C0B09"; // --bg, for the hollow crosshair marker
+const REF_LINE = "rgba(255, 255, 255, 0.26)";
+const GROW_MS = 1100;
 const CHART_MIN_HEIGHT = 220;
 
 const VIEWS = [
@@ -46,13 +64,25 @@ function hasChartData(view, payload) {
   return block.you.length >= 2 || peerPointCount(block) >= 2 || block.you.length + peerPointCount(block) >= 2;
 }
 
+function firstValue(points) {
+  return points.length ? points[0].value : null;
+}
+
 function latestValue(points) {
-  if (!points.length) return null;
-  return points[points.length - 1].value;
+  return points.length ? points[points.length - 1].value : null;
 }
 
 function peerColor(kind) {
   return kind === "guild" ? ROSE : LIME;
+}
+
+function formatValue(value, suffix) {
+  if (value == null) return "—";
+  return `${Math.round(value).toLocaleString()}${suffix}`;
+}
+
+function formatScrubDate(seconds) {
+  return new Date(seconds * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function easeInOutCubic(t) {
@@ -69,12 +99,17 @@ function priceFormatFor(isHours) {
     : { type: "price", precision: 0, minMove: 1 };
 }
 
-function valueRangeForBlock(block) {
+function allValues(block) {
   const values = [];
   for (const point of block.you || []) values.push(point.value);
   for (const peer of block.peers || []) {
     for (const point of peer.points) values.push(point.value);
   }
+  return values;
+}
+
+function valueRangeForBlock(block) {
+  const values = allValues(block);
   if (!values.length) return null;
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -163,10 +198,36 @@ function cancelChartGrow(api) {
   clearStableScale(api);
 }
 
+// Two dashed lines at the real high/low of everything plotted in this
+// range — axis-labelled by lightweight-charts itself, rebuilt on every
+// data apply so they never stack up from a previous range/metric.
+function applyReferenceLines(api, block) {
+  for (const line of api.priceLines) api.seriesYou?.removePriceLine(line);
+  api.priceLines = [];
+  if (!api.seriesYou) return;
+  const values = allValues(block);
+  if (values.length < 2) return;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const opts = (price) => ({
+    price,
+    color: REF_LINE,
+    lineWidth: 1,
+    lineStyle: LineStyle.Dashed,
+    axisLabelVisible: true,
+    title: "",
+  });
+  api.priceLines.push(api.seriesYou.createPriceLine(opts(max)));
+  if (min !== max) api.priceLines.push(api.seriesYou.createPriceLine(opts(min)));
+}
+
 function ensureSeriesStructure(api, block, isHours) {
   const { chart } = api;
   const priceFormat = priceFormatFor(isHours);
   const peers = block.peers || [];
+
+  for (const line of api.priceLines) api.seriesYou?.removePriceLine(line);
+  api.priceLines = [];
 
   if (api.seriesYou) {
     chart.removeSeries(api.seriesYou);
@@ -174,23 +235,35 @@ function ensureSeriesStructure(api, block, isHours) {
   }
   for (const series of api.peerSeries) chart.removeSeries(series);
   api.peerSeries = [];
+  api.peerMeta = [];
 
   for (const peer of peers) {
     const series = chart.addSeries(LineSeries, {
       color: peerColor(peer.kind),
       lineWidth: 2,
+      lineType: LineType.Curved,
       crosshairMarkerVisible: false,
+      priceLineVisible: false,
+      lastValueVisible: false,
       priceFormat,
       title: peer.label,
     });
     api.peerSeries.push(series);
+    api.peerMeta.push({ label: peer.label, kind: peer.kind, color: peerColor(peer.kind) });
   }
 
   api.seriesYou = chart.addSeries(AreaSeries, {
     lineWidth: 3,
-    lineColor: GOLD,
-    topColor: GOLD_FILL,
-    bottomColor: "rgba(212, 175, 55, 0)",
+    lineType: LineType.Curved,
+    lineColor: SKY,
+    topColor: SKY_FILL_TOP,
+    bottomColor: SKY_FILL_BOTTOM,
+    priceLineVisible: false,
+    lastValueVisible: false,
+    crosshairMarkerRadius: 4,
+    crosshairMarkerBorderColor: SKY,
+    crosshairMarkerBackgroundColor: PLOT_BG,
+    crosshairMarkerBorderWidth: 2,
     priceFormat,
     title: "You",
   });
@@ -202,6 +275,7 @@ function applyChartData(api, block) {
   }
   api.seriesYou?.setData(block.you);
   api.chart.timeScale().fitContent();
+  applyReferenceLines(api, block);
 }
 
 function animateChartGrow(api, block, { reducedMotion = false, onStart, onEnd } = {}) {
@@ -256,8 +330,11 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
   const [payload, setPayload] = useState(null);
   const [status, setStatus] = useState("loading");
   const [growing, setGrowing] = useState(false);
+  const [scrub, setScrub] = useState(null); // { x, date, youValue } while hovering the plot
 
   const containerRef = useRef(null);
+  const stageRef = useRef(null);
+  const pillRef = useRef(null);
   const apiRef = useRef(null);
   const reducedMotionRef = useRef(false);
 
@@ -306,7 +383,7 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
       layout: { background: { color: "transparent" }, textColor: "#8C8B90", attributionLogo: false },
       grid: {
         vertLines: { visible: false },
-        horzLines: { color: "rgba(255, 255, 255, 0.08)", style: 2 },
+        horzLines: { color: "rgba(255, 255, 255, 0.07)", style: 2 },
       },
       timeScale: {
         borderColor: "rgba(255, 255, 255, 0.1)",
@@ -317,28 +394,39 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
       rightPriceScale: {
         borderColor: "rgba(255, 255, 255, 0.1)",
         visible: true,
-        scaleMargins: { top: 0.12, bottom: 0.06 },
+        scaleMargins: { top: 0.16, bottom: 0.08 },
       },
       crosshair: {
         mode: 1,
-        vertLine: { color: "rgba(212, 175, 55, 0.35)", width: 1, style: 2 },
-        horzLine: { color: "rgba(212, 175, 55, 0.2)", width: 1, style: 2 },
+        vertLine: { color: "rgba(90, 169, 230, 0.4)", width: 1, style: 2, labelVisible: false },
+        horzLine: { color: "rgba(255, 255, 255, 0.14)", width: 1, style: 2, labelVisible: false },
       },
       handleScroll: false,
       handleScale: false,
     });
 
-    apiRef.current = { chart, seriesYou: null, peerSeries: [], animationId: null };
+    apiRef.current = { chart, seriesYou: null, peerSeries: [], peerMeta: [], priceLines: [], animationId: null };
+
+    const onCrosshair = (param) => {
+      const api = apiRef.current;
+      if (!api?.seriesYou || !param.time || !param.point) {
+        setScrub(null);
+        return;
+      }
+      const youValue = param.seriesData.get(api.seriesYou)?.value ?? null;
+      setScrub({ x: param.point.x, date: formatScrubDate(param.time), youValue });
+    };
+    chart.subscribeCrosshairMove(onCrosshair);
 
     const resizeObserver = new ResizeObserver(() => {
       if (!containerRef.current) return;
-      const next = plotSize();
-      chart.applyOptions(next);
+      chart.applyOptions(plotSize());
     });
     resizeObserver.observe(el);
 
     return () => {
       cancelChartGrow(apiRef.current);
+      chart.unsubscribeCrosshairMove(onCrosshair);
       resizeObserver.disconnect();
       chart.remove();
     };
@@ -350,6 +438,7 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
     const block = getBlock(activeView, payload);
     if (!hasChartData(activeView, payload)) return;
 
+    setScrub(null);
     animateChartGrow(
       apiRef.current,
       { ...block, isHours: activeView.id === "hours" },
@@ -361,10 +450,27 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
     );
   }, [payload, viewIndex]);
 
+  // Clamp the scrub pill within the plot once it's measured.
+  useLayoutEffect(() => {
+    if (!scrub || !pillRef.current || !stageRef.current) return;
+    const stageWidth = stageRef.current.clientWidth;
+    const pillWidth = pillRef.current.offsetWidth;
+    const left = Math.max(4, Math.min(scrub.x - pillWidth / 2, stageWidth - pillWidth - 4));
+    pillRef.current.style.transform = `translateX(${left}px)`;
+  }, [scrub]);
+
   if (!userId) return null;
 
   const block = payload ? getBlock(view, payload) : null;
-  const youValue = block ? latestValue(block.you) : null;
+  const rangeStartYou = block ? firstValue(block.you) : null;
+  const latestYou = block ? latestValue(block.you) : null;
+  const shownYou = scrub?.youValue ?? latestYou;
+  const delta =
+    rangeStartYou != null && shownYou != null ? shownYou - rangeStartYou : null;
+  const deltaPct =
+    delta != null && rangeStartYou ? (delta / Math.abs(rangeStartYou)) * 100 : null;
+  const deltaDir = delta == null ? null : delta >= 0 ? "up" : "down";
+
   const friendLineCount = block?.peers?.filter((p) => p.kind === "friend").length ?? 0;
   const guildLineCount = block?.peers?.filter((p) => p.kind === "guild").length ?? 0;
   const showChart = status === "ready" && payload && hasChartData(view, payload);
@@ -379,16 +485,26 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
             <span className="stock-style-chart__subtitle">{view.subtitle}</span>
           </div>
 
+          {showChart && shownYou != null && (
+            <div className="stock-style-chart__headline">
+              <span className="stock-style-chart__headline-value">
+                {formatValue(shownYou, view.valueSuffix)}
+              </span>
+              {delta != null && deltaPct != null && (
+                <span className={`stock-style-chart__delta stock-style-chart__delta--${deltaDir}`}>
+                  {deltaDir === "up" ? "▲" : "▼"} {formatValue(Math.abs(delta), view.valueSuffix)}
+                  {" "}({Math.abs(deltaPct).toFixed(1)}%)
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {showChart && (
           <div className="stock-style-chart__legend" aria-hidden="true">
             <span className="stock-style-chart__legend-item">
               <span className="stock-style-chart__legend-dot stock-style-chart__legend-dot--you" />
               You
-              {youValue != null && (
-                <span className="stock-style-chart__legend-value">
-                  {Math.round(youValue).toLocaleString()}
-                  {view.valueSuffix}
-                </span>
-              )}
             </span>
             {friendLineCount > 0 && (
               <span className="stock-style-chart__legend-item">
@@ -403,7 +519,7 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
               </span>
             )}
           </div>
-        </div>
+        )}
 
         {status === "loading" && <p className="panel__status overview-stock-chart__status">Loading chart…</p>}
         {status === "error" && <p className="panel__status panel__status--error overview-stock-chart__status">Couldn't load chart data.</p>}
@@ -415,6 +531,7 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
       </div>
 
       <div
+        ref={stageRef}
         className={`overview-stock-chart__plot-stage ${showChart ? "overview-stock-chart__plot-stage--live" : "overview-stock-chart__plot-stage--idle"}${growing ? " overview-stock-chart__plot-stage--growing" : ""}`}
       >
         <div
@@ -422,6 +539,14 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
           className={`stock-style-chart__plot overview-stock-chart__plot ${showChart ? "" : "overview-stock-chart__plot--hidden"}`}
           aria-hidden={!showChart}
         />
+        {showChart && scrub && (
+          <div ref={pillRef} className="stock-style-chart__pill">
+            {scrub.date}
+            {scrub.youValue != null && (
+              <span className="stock-style-chart__pill-value"> · {formatValue(scrub.youValue, view.valueSuffix)}</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="overview-stock-chart__footer">
