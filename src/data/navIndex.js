@@ -40,6 +40,7 @@ export const NAV_INDEX = [
   { label: "Guilds", view: "guilds", keywords: "social friends activity crew" },
   { label: "Friends", view: "friends", keywords: "social guilds add friend code" },
   { label: "Inbox", view: "inbox", keywords: "messages dm direct message chat friends" },
+  { label: "Assistant", view: "assistant", keywords: "ai llm chat gpt openai anthropic claude bring your own key byok assistant" },
   { label: "Account Settings", view: "settings", keywords: "profile avatar theme" },
   { label: "Account Linking", view: "linking", keywords: "steam link connect" },
   { label: "Dashfeed Settings", view: "dashfeed", keywords: "toggles layout" },

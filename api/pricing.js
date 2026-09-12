@@ -39,10 +39,12 @@
 //   POST /api/pricing?service=psn&mode=wishlist, Authorization: Bearer <token>
 //   POST /api/pricing?service=lykodex-session, Authorization: Bearer <caller's access token>
 //   GET  /api/pricing?service=mastery-cron, Authorization: Bearer <CRON_SECRET> (Vercel Cron only, see vercel.json)
+//   POST /api/pricing?service=assistant, body {baseUrl, apiKey, model, messages} (bring-your-own-LLM chat proxy)
 
 import { allowCors } from "./_cors.js";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
+import { assistantChat } from "../src/lib/assistantProxy.js";
 import { computeXboxScore, computePsScore, computeSteamScore, computeMasteryScore, accountXpFromMastery, levelFromXp } from "../src/lib/gameMastery.js";
 import { computeOverallScore } from "../src/lib/overallMastery.js";
 
@@ -1744,6 +1746,20 @@ async function handleCurrency(res) {
   }
 }
 
+// Bring-your-own-LLM assistant. Forwards a chat request to any
+// OpenAI-compatible endpoint using the provider config the caller sends
+// in the body. PROTOTYPE: the key arrives per-request from the browser
+// (stored client-side) rather than from a service_role table like
+// xbox_tokens/psn_tokens — see src/lib/assistantConfig.js for why, and
+// what to harden before this ships for real.
+async function handleAssistant(req, res) {
+  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  const { baseUrl, apiKey, model, messages } = req.body || {};
+  const result = await assistantChat({ baseUrl, apiKey, model, messages });
+  if (!result.ok) return res.status(result.status || 502).json({ error: result.error });
+  return res.status(200).json({ message: result.message, model: result.model, usage: result.usage });
+}
+
 export default async function handler(req, res) {
   allowCors(res);
   // The browser's CORS preflight for a non-simple request (Xbox/PSN
@@ -1772,6 +1788,7 @@ export default async function handler(req, res) {
   if (service === "crunchyroll") return handleCrunchyroll(req, searchParams, res);
   if (service === "mastery-cron") return handleMasteryCron(req, res);
   if (service === "lykodex-session") return handleLykodexSession(req, res);
+  if (service === "assistant") return handleAssistant(req, res);
 
   return res.status(400).json({ error: "Missing or invalid service parameter" });
 }
