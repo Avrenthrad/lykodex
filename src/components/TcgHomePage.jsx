@@ -344,29 +344,25 @@ function OnePieceSummary({ isLoggedIn, userId }) {
   );
 }
 
-// Riftbound deliberately left out of GAME_TABS below for now — its
-// proxy (api/pricing.js's handleRiftbound) is currently blocked in
-// production (Riftcodex 403s requests from Vercel's infrastructure,
-// see that file's comment), so the tab would just be a dead end.
-// RIFTBOUND_FEATURES + RiftboundSummary (same shape as the other
-// per-game summaries above) and this file's now-unused
-// fetchRiftboundCollection/enrichRiftboundCollectionEntry imports were
-// removed rather than kept as dead code — see commit 6694bd4 (the
-// original TCG College build) to restore them, or just re-add a
-// GAME_TABS entry + summary component matching the pattern above,
-// once Riftbound's proxy is fixed. The actual Riftbound page/lib code (RiftboundSearchPage.jsx,
-// lib/riftbound.js, etc.) is untouched and still fully wired — only
-// this file's tab entry point was removed.
+// Riftbound is fully built (RiftboundSearchPage.jsx, lib/riftbound.js,
+// the DB tables — all untouched and still wired) but its tab is shown
+// disabled: its proxy (api/pricing.js's handleRiftbound) is blocked in
+// production (Riftcodex 403s requests from Vercel's infrastructure, see
+// that file's comment), so enabling it would be a dead end. Kept as a
+// greyed-out "coming soon" tab at the end rather than hidden; drop the
+// `disabled` flag (and give it a features/Summary pair like the others,
+// restorable from commit 6694bd4) once that proxy is fixed.
 const GAME_TABS = [
-  { id: "mtg", label: "Magic: The Gathering", features: MTG_FEATURES, Summary: MtgSummary },
-  { id: "fab", label: "Flesh and Blood", features: FAB_FEATURES, Summary: FabSummary },
   { id: "pokemon", label: "Pokémon", features: POKEMON_FEATURES, Summary: PokemonSummary },
-  { id: "yugioh", label: "Yu-Gi-Oh!", features: YUGIOH_FEATURES, Summary: YugiohSummary },
+  { id: "mtg", label: "Magic: The Gathering", features: MTG_FEATURES, Summary: MtgSummary },
   { id: "onepiece", label: "One Piece", features: ONEPIECE_FEATURES, Summary: OnePieceSummary },
+  { id: "fab", label: "Flesh and Blood", features: FAB_FEATURES, Summary: FabSummary },
+  { id: "yugioh", label: "Yu-Gi-Oh!", features: YUGIOH_FEATURES, Summary: YugiohSummary },
+  { id: "riftbound", label: "Riftbound", disabled: true },
 ];
 
 export default function TcgHomePage({ onNavigate, isLoggedIn, userId }) {
-  const [game, setGame] = useState("mtg");
+  const [game, setGame] = useState(GAME_TABS[0].id);
   const activeTab = GAME_TABS.find((t) => t.id === game) || GAME_TABS[0];
   const ActiveSummary = activeTab.Summary;
 
@@ -383,6 +379,8 @@ export default function TcgHomePage({ onNavigate, isLoggedIn, userId }) {
             type="button"
             className={`quickdash-reset-btn ${game === t.id ? "quickdash-reset-btn--active" : ""}`}
             onClick={() => setGame(t.id)}
+            disabled={t.disabled}
+            title={t.disabled ? "Coming soon" : undefined}
           >
             {t.label}
           </button>
