@@ -126,6 +126,7 @@ const KNOWN_VIEWS = [
   "riftbound-search",
   "riftbound-collection",
   "riftbound-decks",
+  "assistant",
 ];
 
 // The 5 College home pages only — not their subpages (backlog,
