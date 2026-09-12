@@ -1,0 +1,26 @@
+{
+  "name": "Lykodex (React + Vite)",
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "npm run dev -- --host",
+      "description": "Vite dev server (HMR) for the Lykodex web app on http://localhost:5173. Runs logged-out unless VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are provided as secrets."
+    },
+    {
+      "name": "preview",
+      "command": "npm run build && npm run preview -- --host --port 4173",
+      "description": "Production preview: builds dist/ and serves the built bundle on http://localhost:4173. Closest to how the app runs in production."
+    }
+  ],
+  "ports": [
+    {
+      "name": "vite-dev",
+      "port": 5173
+    },
+    {
+      "name": "vite-preview",
+      "port": 4173
+    }
+  ]
+}
