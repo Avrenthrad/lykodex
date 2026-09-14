@@ -27,8 +27,6 @@ import { fetchCollection as fetchYugiohCollection, enrichCollectionEntry as enri
 import { currentYugiohPrice } from "../lib/yugioh";
 import { fetchCollection as fetchOnePieceCollection, enrichCollectionEntry as enrichOnePieceCollectionEntry } from "../lib/onepieceCollection";
 import { currentOnePiecePrice } from "../lib/onepiece";
-import CollegePageTitle from "./CollegePageTitle";
-
 const MTG_FEATURES = [
   { id: "mtg-scan", label: "Scan Cards", icon: "📷", desc: "Free on-device text recognition, matched against real Scryfall data.", emphasized: true },
   { id: "mtg-search", label: "Card Search", icon: "🔍", desc: "Full Scryfall search — real cards, real pricing." },
@@ -372,10 +370,6 @@ export default function TcgHomePage({ onNavigate, isLoggedIn, userId }) {
 
   return (
     <div className="price-page">
-      <div className="price-page__head">
-        <CollegePageTitle collegeId="tcg" />
-      </div>
-
       <div className="backlog-status-tabs">
         {GAME_TABS.map((t) => (
           <button

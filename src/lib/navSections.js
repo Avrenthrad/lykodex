@@ -95,3 +95,16 @@ export function getCollegeSidebarForView(view) {
   }
   return null;
 }
+
+/** College home views only — full-width hero banner, not sub-pages. */
+const COLLEGE_HERO_BY_VIEW = {
+  dashboard: "gaming",
+  "tcg-home": "tcg",
+  "college-entertainment": "entertainment",
+  "college-collectibles": "collectibles",
+  "college-tabletop": "tabletop",
+};
+
+export function getCollegeHeroForView(view) {
+  return COLLEGE_HERO_BY_VIEW[view] ?? null;
+}

@@ -13,7 +13,6 @@
 // stays honest manual entry.
 
 import { useEffect, useState } from "react";
-import CollegePageTitle from "./CollegePageTitle";
 import { fetchCollectibles, addCollectible, updateCollectible, removeCollectible } from "../lib/collectibles";
 import { lookupProductByBarcode } from "../lib/upc";
 import { searchFunkoCatalog } from "../lib/funko";
@@ -95,7 +94,6 @@ export default function CollectiblesHomePage({ onBack, isLoggedIn, userId, onSig
       <div className="price-page">
         <div className="price-page__head">
           <button type="button" className="back-link" onClick={onBack}>← Back to Overview</button>
-          <CollegePageTitle collegeId="collectibles" label="Loot Collection" />
           <p className="price-page__subtitle">Your real shelf — Pops, statues, LEGO, hardware, and more.</p>
         </div>
         <div className="backlog-add">
@@ -114,7 +112,6 @@ export default function CollectiblesHomePage({ onBack, isLoggedIn, userId, onSig
     <div className="price-page">
       <div className="price-page__head">
         <button type="button" className="back-link" onClick={onBack}>← Back to Overview</button>
-        <CollegePageTitle collegeId="collectibles" />
         <p className="price-page__subtitle">
           Scan a barcode, or search the real Funko Pop, LEGO (Rebrickable), or vinyl (Discogs)
           catalogs to add items fast — everything else stays honest manual entry.

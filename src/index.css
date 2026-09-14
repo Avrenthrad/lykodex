@@ -3326,6 +3326,230 @@ a.dash-drawer__community-link:hover {
   margin: 8px 0 4px;
 }
 
+/* Full-width college home hero — canvas animation + emblem/title */
+.college-hero-banner {
+  position: relative;
+  flex: 0 0 100%;
+  width: 100%;
+  min-height: 168px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  isolation: isolate;
+}
+
+.college-hero-banner__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.college-hero-banner__veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bg) 88%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 62%, transparent) 38%,
+    color-mix(in srgb, var(--bg) 72%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+.college-hero-banner__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 28px 24px 30px;
+}
+
+.college-hero-banner__mark {
+  position: relative;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+}
+
+.college-hero-banner__sigils {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.college-hero-banner__halo,
+.college-hero-banner__ring {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+}
+
+.college-hero-banner__halo {
+  background: radial-gradient(circle, color-mix(in srgb, var(--college-accent, var(--accent)) 28%, transparent) 0%, transparent 72%);
+  animation: college-title-halo 2.8s ease-in-out infinite;
+}
+
+.college-hero-banner__ring {
+  border: 1px solid color-mix(in srgb, var(--college-accent, var(--accent)) 42%, transparent);
+  animation: college-title-ring 3.2s ease-in-out infinite;
+}
+
+.college-hero-banner__icon {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--college-accent, var(--accent)) 55%, transparent));
+  animation: college-hero-emblem 3.4s ease-in-out infinite;
+}
+
+.college-hero-banner__sigil {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--college-accent, var(--accent));
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--college-accent, var(--accent)) 55%, transparent);
+  animation: college-hero-sigil 4.2s ease-in-out infinite;
+}
+
+.college-hero-banner__sigil--1 { animation-delay: 0s; --sigil-x: 38px; --sigil-y: -28px; }
+.college-hero-banner__sigil--2 { animation-delay: 1s; --sigil-x: -36px; --sigil-y: -24px; }
+.college-hero-banner__sigil--3 { animation-delay: 2s; --sigil-x: 34px; --sigil-y: 30px; }
+.college-hero-banner__sigil--4 { animation-delay: 3s; --sigil-x: -38px; --sigil-y: 26px; }
+.college-hero-banner__sigil--5 { animation-delay: 0.5s; --sigil-x: 0px; --sigil-y: -42px; }
+
+.college-hero-banner__copy {
+  min-width: 0;
+}
+
+.college-hero-banner__title {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: clamp(1.65rem, 2.8vw, 2.15rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  background: linear-gradient(
+    100deg,
+    var(--college-text-a, var(--text)) 0%,
+    var(--college-text-b, var(--text-muted)) 35%,
+    var(--college-text-c, var(--text)) 70%,
+    var(--college-text-a, var(--text)) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: college-title-shimmer 4.5s ease-in-out infinite;
+}
+
+.college-hero-banner__tagline {
+  margin: 0;
+  max-width: 52ch;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.college-hero-banner--gaming {
+  --college-accent: var(--sky);
+  --college-text-a: #e0f2fe;
+  --college-text-b: #7dd3fc;
+  --college-text-c: #f0f9ff;
+}
+
+.college-hero-banner--tcg {
+  --college-accent: var(--violet);
+  --college-text-a: #ede9fe;
+  --college-text-b: #c4b5fd;
+  --college-text-c: #a78bfa;
+}
+
+.college-hero-banner--entertainment {
+  --college-accent: var(--rose);
+  --college-text-a: #ffe4e6;
+  --college-text-b: #fda4af;
+  --college-text-c: #fecdd3;
+}
+
+.college-hero-banner--collectibles {
+  --college-accent: var(--amber);
+  --college-text-a: #fef3c7;
+  --college-text-b: #fcd34d;
+  --college-text-c: #fde68a;
+}
+
+.college-hero-banner--tabletop {
+  --college-accent: var(--lime);
+  --college-text-a: #ecfccb;
+  --college-text-b: #bef264;
+  --college-text-c: #d9f99d;
+}
+
+@keyframes college-hero-emblem {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.03); }
+}
+
+@keyframes college-hero-sigil {
+  0%, 8%, 100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate(0, 0) scale(0.55);
+  }
+  18%, 32% {
+    opacity: 0.92;
+    transform: translate(-50%, -50%) translate(var(--sigil-x, 38px), var(--sigil-y, -28px)) scale(1);
+  }
+}
+
+.dash-layout--with-hero {
+  flex-wrap: wrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .college-hero-banner__halo,
+  .college-hero-banner__ring,
+  .college-hero-banner__icon,
+  .college-hero-banner__title,
+  .college-hero-banner__sigil {
+    animation: none !important;
+  }
+
+  .college-hero-banner__sigil {
+    display: none;
+  }
+
+  .college-hero-banner__title {
+    color: var(--text);
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+@media (max-width: 640px) {
+  .college-hero-banner__content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 22px 16px 24px;
+  }
+
+  .college-hero-banner__mark {
+    width: 72px;
+    height: 72px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .college-page-title__halo,
   .college-page-title__ring,
