@@ -898,6 +898,27 @@ button { font-family: inherit; }
   flex-shrink: 0;
 }
 
+.platform-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.platform-tag--xbox {
+  border-color: color-mix(in srgb, var(--lime) 40%, var(--border));
+  color: var(--lime);
+}
+
+.platform-tag--playstation {
+  border-color: color-mix(in srgb, var(--sky) 40%, var(--border));
+  color: var(--sky);
+}
+
 .achievement-category {
   margin: 14px 0;
 }

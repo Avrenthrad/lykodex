@@ -60,12 +60,22 @@ export async function fetchPsnWishlist() {
   return callPsnService("wishlist");
 }
 
+// Real trophy-eligible game list — { games: [{ npCommunicationId,
+// npServiceName, name, imageUrl, platform, definedTrophies,
+// earnedTrophies }] }. This is the real source for "which games can
+// this account sync trophies for", NOT fetchPsnLibrary above — that's
+// a general played-games list (includes non-game apps, and its titleId
+// is a different ID space that 404s against the trophy endpoints,
+// confirmed live). See AchievementsPage.jsx's game-picker.
+export async function fetchPsnTrophyTitles() {
+  return callPsnService("trophy-titles");
+}
+
 // Real per-title trophy list — { trophies: [{ trophyId, name,
 // description, icon, type, unlocked, unlockedAt, rarity }] }.
-// npCommunicationId is the same titleId fetchPsnLibrary already
-// returns for each game (see api/pricing.js's psnFetchMergedTrophies
-// ForTitle). See AchievementsPage.jsx for the "pick a game from your
-// real library, then sync/refresh" flow.
-export async function fetchPsnTitleTrophies(npCommunicationId) {
-  return callPsnService("title-trophies", { npCommunicationId });
+// npCommunicationId and npServiceName both come from fetchPsnTrophyTitles
+// above (per-title, not guessable — see api/pricing.js's
+// psnFetchMergedTrophiesForTitle for why a fallback guess was wrong).
+export async function fetchPsnTitleTrophies(npCommunicationId, npServiceName) {
+  return callPsnService("title-trophies", { npCommunicationId, npServiceName });
 }

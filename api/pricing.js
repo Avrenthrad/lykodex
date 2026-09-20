@@ -38,7 +38,8 @@
 //   POST /api/pricing?service=psn&mode=presence, Authorization: Bearer <token>
 //   POST /api/pricing?service=psn&mode=library, Authorization: Bearer <token>
 //   POST /api/pricing?service=psn&mode=wishlist, Authorization: Bearer <token>
-//   POST /api/pricing?service=psn&mode=title-trophies, Authorization: Bearer <token>, body {npCommunicationId}
+//   POST /api/pricing?service=psn&mode=trophy-titles, Authorization: Bearer <token>
+//   POST /api/pricing?service=psn&mode=title-trophies, Authorization: Bearer <token>, body {npCommunicationId, npServiceName}
 //   POST /api/pricing?service=lykodex-session, Authorization: Bearer <caller's access token>
 //   GET  /api/pricing?service=mastery-cron, Authorization: Bearer <CRON_SECRET> (Vercel Cron only, see vercel.json)
 
@@ -1171,30 +1172,21 @@ async function psnFetchEarnedTrophiesForTitle(accessToken, accountId, npCommunic
   return data.trophies || [];
 }
 
-// PS5-native titles take no npServiceName at all; PS4/PS3/Vita titles
-// need npServiceName=trophy or Sony 404s — a documented psn-api quirk
-// with no reliable field on the gamelist response to tell which up
-// front, so this tries the PS5 shape first and falls back to the
-// legacy one on a 404 rather than guessing which generation a title is.
-async function psnFetchMergedTrophiesForTitle(accessToken, accountId, npCommunicationId) {
-  async function attempt(npServiceName) {
-    const [definitions, earned] = await Promise.all([
-      psnFetchTitleTrophyDefinitions(accessToken, npCommunicationId, npServiceName),
-      psnFetchEarnedTrophiesForTitle(accessToken, accountId, npCommunicationId, npServiceName),
-    ]);
-    return { definitions, earned };
-  }
+// npServiceName has to be the title's own real value ("trophy2" for a
+// PS5-native title, "trophy" for PS4/PS3/Vita) — confirmed live against
+// a real account that guessing this (try none, fall back to "trophy" on
+// a 404) is wrong: a real PS5 title's correct value is "trophy2", which
+// that fallback never tried, so every title 404'd. The real source is
+// psnFetchTrophyTitles below, which hands back each title's own
+// npServiceName directly — no guessing needed once you have it.
+async function psnFetchMergedTrophiesForTitle(accessToken, accountId, npCommunicationId, npServiceName) {
+  const [definitions, earned] = await Promise.all([
+    psnFetchTitleTrophyDefinitions(accessToken, npCommunicationId, npServiceName),
+    psnFetchEarnedTrophiesForTitle(accessToken, accountId, npCommunicationId, npServiceName),
+  ]);
 
-  let result;
-  try {
-    result = await attempt(undefined);
-  } catch (err) {
-    if (err.status !== 404) throw err;
-    result = await attempt("trophy");
-  }
-
-  const earnedById = new Map(result.earned.map((t) => [t.trophyId, t]));
-  return result.definitions.map((def) => {
+  const earnedById = new Map(earned.map((t) => [t.trophyId, t]));
+  return definitions.map((def) => {
     const earnedRow = earnedById.get(def.trophyId);
     return {
       trophyId: def.trophyId,
@@ -1209,9 +1201,44 @@ async function psnFetchMergedTrophiesForTitle(accessToken, accountId, npCommunic
   });
 }
 
-// Same refresh-if-needed pattern as getLiveTrophies/getLivePsnLibrary
-// above, calling psnFetchMergedTrophiesForTitle at the end.
-async function getLiveTrophiesForTitle(adminClient, userId, npCommunicationId) {
+// Real trophy-eligible title list confirmed against achievements-app/
+// psn-api's getUserTrophyTitles implementation — this, not the general
+// "played games" gamelist (psnFetchLibrary), is the real source for
+// which of a person's games have trophies at all, since it's the only
+// endpoint that hands back a title's real npCommunicationId (NPWR-
+// format) AND its exact npServiceName together — confirmed live that
+// the gamelist's own titleId (PPSA-format) is a different ID space
+// entirely and 404s outright against the trophy endpoints.
+async function psnFetchTrophyTitles(accessToken, accountId) {
+  const PAGE_LIMIT = 200;
+  let offset = 0;
+  const allTitles = [];
+  for (;;) {
+    const url = `https://m.np.playstation.com/api/trophy/v1/users/${accountId}/trophyTitles?limit=${PAGE_LIMIT}&offset=${offset}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "");
+      throw new Error(`PSN trophy title list request failed (${res.status})${bodyText ? `: ${bodyText.slice(0, 300)}` : ""}`);
+    }
+    const data = await res.json();
+    allTitles.push(...(data.trophyTitles || []));
+    const total = data.totalItemCount ?? allTitles.length;
+    if (allTitles.length >= total || !data.trophyTitles?.length) break;
+    offset += PAGE_LIMIT;
+  }
+
+  return allTitles.map((t) => ({
+    npCommunicationId: t.npCommunicationId,
+    npServiceName: t.npServiceName,
+    name: t.trophyTitleName,
+    imageUrl: t.trophyTitleIconUrl || null,
+    platform: t.trophyTitlePlatform || null,
+    definedTrophies: t.definedTrophies || null,
+    earnedTrophies: t.earnedTrophies || null,
+  }));
+}
+
+async function getLivePsnTrophyTitles(adminClient, userId) {
   const { data: stored, error: fetchError } = await adminClient.from("psn_tokens").select("*").eq("user_id", userId).maybeSingle();
   if (fetchError) throw fetchError;
   if (!stored) return "not_linked";
@@ -1232,7 +1259,34 @@ async function getLiveTrophiesForTitle(adminClient, userId, npCommunicationId) {
     }).eq("user_id", userId);
   }
 
-  const trophies = await psnFetchMergedTrophiesForTitle(accessToken, stored.account_id, npCommunicationId);
+  const games = await psnFetchTrophyTitles(accessToken, stored.account_id);
+  return { games };
+}
+
+// Same refresh-if-needed pattern as getLiveTrophies/getLivePsnLibrary
+// above, calling psnFetchMergedTrophiesForTitle at the end.
+async function getLiveTrophiesForTitle(adminClient, userId, npCommunicationId, npServiceName) {
+  const { data: stored, error: fetchError } = await adminClient.from("psn_tokens").select("*").eq("user_id", userId).maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!stored) return "not_linked";
+  if (!stored.account_id) return "not_linked";
+
+  let accessToken = stored.access_token;
+  if (new Date(stored.access_expires_at).getTime() < Date.now()) {
+    if (new Date(stored.refresh_expires_at).getTime() < Date.now()) return "expired";
+    const refreshed = await psnRefreshTokens(stored.refresh_token);
+    accessToken = refreshed.access_token;
+    const now = Date.now();
+    await adminClient.from("psn_tokens").update({
+      access_token: refreshed.access_token,
+      refresh_token: refreshed.refresh_token || stored.refresh_token,
+      access_expires_at: new Date(now + refreshed.expires_in * 1000).toISOString(),
+      refresh_expires_at: new Date(now + refreshed.refresh_token_expires_in * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("user_id", userId);
+  }
+
+  const trophies = await psnFetchMergedTrophiesForTitle(accessToken, stored.account_id, npCommunicationId, npServiceName);
   return { trophies };
 }
 
@@ -1415,9 +1469,18 @@ async function handlePsn(req, searchParams, res) {
     if (mode === "title-trophies") {
       if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
       const { userId, adminClient } = await verifyCallerAndGetAdminClient(req);
-      const { npCommunicationId } = req.body || {};
+      const { npCommunicationId, npServiceName } = req.body || {};
       if (!npCommunicationId) return res.status(400).json({ error: "Missing npCommunicationId" });
-      const result = await getLiveTrophiesForTitle(adminClient, userId, npCommunicationId);
+      const result = await getLiveTrophiesForTitle(adminClient, userId, npCommunicationId, npServiceName);
+      if (result === "not_linked") return res.status(404).json({ error: "PlayStation not linked" });
+      if (result === "expired") return res.status(401).json({ error: "PlayStation link expired — please re-link with a fresh npsso" });
+      return res.status(200).json(result);
+    }
+
+    if (mode === "trophy-titles") {
+      if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+      const { userId, adminClient } = await verifyCallerAndGetAdminClient(req);
+      const result = await getLivePsnTrophyTitles(adminClient, userId);
       if (result === "not_linked") return res.status(404).json({ error: "PlayStation not linked" });
       if (result === "expired") return res.status(401).json({ error: "PlayStation link expired — please re-link with a fresh npsso" });
       return res.status(200).json(result);
