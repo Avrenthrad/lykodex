@@ -10,12 +10,14 @@
 
 import { supabase } from "./supabaseClient";
 
-export async function fetchPlatformAchievements(userId, platform) {
+// Xbox AND PlayStation together, one query — the Achievement Tracker
+// shows every tracked game on one page (no per-platform tab to switch),
+// so it needs both at once rather than two separate fetches.
+export async function fetchAllPlatformAchievements(userId) {
   const { data, error } = await supabase
     .from("platform_achievements")
     .select("*")
     .eq("user_id", userId)
-    .eq("platform", platform)
     .order("game_name", { ascending: true })
     .order("added_at", { ascending: true });
   if (error) throw error;
@@ -61,7 +63,7 @@ export async function updateAchievementCategory(achievementId, category) {
 // own category tag on a previously-synced achievement survives every
 // future refresh untouched. achievements come from fetchXboxAchievements
 // (externalId -> id) or fetchPsnTitleTrophies (externalId -> trophyId).
-export async function upsertSyncedAchievements(userId, platform, gameName, externalTitleId, achievements) {
+export async function upsertSyncedAchievements(userId, platform, gameName, externalTitleId, achievements, externalServiceName) {
   const rows = achievements.map((a) => ({
     user_id: userId,
     platform,
@@ -71,6 +73,7 @@ export async function upsertSyncedAchievements(userId, platform, gameName, exter
     icon_url: a.icon || null,
     external_id: String(a.externalId),
     external_title_id: String(externalTitleId),
+    external_service_name: externalServiceName || null,
     source: "synced",
     unlocked: a.unlocked,
     unlocked_at: a.unlockedAt || null,

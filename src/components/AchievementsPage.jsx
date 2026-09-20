@@ -1,19 +1,28 @@
-// Achievement/trophy tracker for the Gaming College.
+// Achievement/trophy tracker for the Gaming College — one page, every
+// tracked game together (no per-platform tab to switch), each game
+// tagged with a small platform badge (see PlatformTag below).
 //
-// Steam tab is a live, read-only view of real Steam data (schema +
+// Steam's section is a live, read-only view of real Steam data (schema +
 // unlock state + global rarity, all already fetched elsewhere in this
 // app for the Backlog page and Game Mastery Score — this is the first
 // place that renders the actual per-achievement list). Nothing to
 // "tick off" here since Steam already tracks it automatically.
 //
-// Xbox/PlayStation tabs can sync for real: pick a game from the
-// person's own linked library (fetchXboxLibrary/fetchPsnLibrary already
-// existed for Gaming Presence/Mastery) and pull its real achievement/
-// trophy list via achievements.xboxlive.com / PSN's per-title trophy
-// endpoints — same unofficial-but-real posture as everything else this
-// app does with these two platforms. Manual free-text entry stays
-// available underneath for anything sync can't reach (an unlinked
-// platform, or a game not appearing in the fetched library).
+// Xbox/PlayStation can sync for real: pick a game from the person's own
+// linked library and pull its real achievement/trophy list via
+// achievements.xboxlive.com / PSN's per-title trophy endpoints — same
+// unofficial-but-real posture as everything else this app does with
+// these two platforms. Manual free-text entry stays available
+// underneath for anything sync can't reach (an unlinked platform, or a
+// game not appearing in the fetched library).
+//
+// PSN gotcha (confirmed live, not guessed): the general "played games"
+// list (fetchPsnLibrary, used elsewhere for presence/mastery) is the
+// WRONG source for which games can sync trophies — its titleId is a
+// different ID space that 404s outright against the trophy endpoints.
+// The real source is fetchPsnTrophyTitles, which returns each trophy-
+// eligible game's actual npCommunicationId AND the exact npServiceName
+// to use with it (e.g. "trophy2" for a PS5-native title) — no guessing.
 
 import { useEffect, useId, useState } from "react";
 import {
@@ -24,7 +33,7 @@ import {
   steamHeaderArt,
 } from "../lib/steam";
 import {
-  fetchPlatformAchievements,
+  fetchAllPlatformAchievements,
   addPlatformAchievement,
   toggleAchievementUnlocked,
   deletePlatformAchievement,
@@ -33,13 +42,26 @@ import {
 } from "../lib/platformAchievements";
 import { fetchSteamAchievementCategories, setSteamAchievementCategory } from "../lib/steamAchievementCategories";
 import { fetchXboxLibrary, fetchXboxAchievements } from "../lib/xboxOAuth";
-import { fetchPsnLibrary, fetchPsnTitleTrophies } from "../lib/psnAuth";
+import { fetchPsnTrophyTitles, fetchPsnTitleTrophies } from "../lib/psnAuth";
 import { recordGameCompletionIfNew } from "../lib/achievements";
+
+const PLATFORM_LABELS = { steam: "Steam", xbox: "Xbox", playstation: "PlayStation" };
+
+// Small badge naming which platform a game card came from — deliberately
+// just a label, never a merge key: the same game owned on two platforms
+// shows as two separate cards, each tagged with its own platform, rather
+// than guessing they're "the same game" by name (this codebase has real
+// scars from exactly that kind of name-matching — see Gaming
+// Collection's removed DLC-nesting heuristic).
+function PlatformTag({ platform }) {
+  return <span className={`platform-tag platform-tag--${platform}`}>{PLATFORM_LABELS[platform] || platform}</span>;
+}
 
 // Pulls the real achievement/trophy list for one game from the right
 // platform's API and upserts it into platform_achievements — the one
 // function both "track a new game" and a per-game "Refresh" button call.
-async function syncPlatformGame(userId, platform, gameName, externalTitleId) {
+// serviceName is PSN's npServiceName (ignored for Xbox).
+async function syncPlatformGame(userId, platform, gameName, externalTitleId, serviceName) {
   const achievements = platform === "xbox"
     ? (await fetchXboxAchievements(externalTitleId)).achievements.map((a) => ({
         externalId: a.id,
@@ -49,7 +71,7 @@ async function syncPlatformGame(userId, platform, gameName, externalTitleId) {
         unlocked: a.unlocked,
         unlockedAt: a.unlockedAt,
       }))
-    : (await fetchPsnTitleTrophies(externalTitleId)).trophies.map((t) => ({
+    : (await fetchPsnTitleTrophies(externalTitleId, serviceName)).trophies.map((t) => ({
         externalId: t.trophyId,
         name: t.name,
         description: t.description,
@@ -57,7 +79,7 @@ async function syncPlatformGame(userId, platform, gameName, externalTitleId) {
         unlocked: t.unlocked,
         unlockedAt: t.unlockedAt,
       }));
-  await upsertSyncedAchievements(userId, platform, gameName, externalTitleId, achievements);
+  await upsertSyncedAchievements(userId, platform, gameName, externalTitleId, achievements, serviceName);
 }
 
 // Splits a flat achievement/trophy list into named sections, preserving
@@ -182,41 +204,19 @@ async function fetchMergedAchievements(steamId, appid) {
   return merged;
 }
 
-const TABS = [
-  { id: "steam", label: "Steam" },
-  { id: "xbox", label: "Xbox" },
-  { id: "playstation", label: "PlayStation" },
-];
-
 export default function AchievementsPage({ onBack, userId, linkedSteamId }) {
-  const [tab, setTab] = useState("steam");
-
   return (
     <div className="price-page">
       <div className="price-page__head">
         <button type="button" className="back-link" onClick={onBack}>← Back to Gaming</button>
         <h1 className="price-page__title">Achievement Tracker</h1>
         <p className="price-page__subtitle">
-          Steam syncs automatically. Pick a game from your Xbox/PlayStation library to sync it too, or track anything manually.
+          Every game you're tracking, all on one page — Steam syncs automatically; pick a game from your Xbox/PlayStation library to sync it too, or track anything manually.
         </p>
       </div>
 
-      <div className="backlog-status-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`quickdash-reset-btn ${tab === t.id ? "quickdash-reset-btn--active" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "steam" && <SteamAchievements linkedSteamId={linkedSteamId} userId={userId} />}
-      {tab === "xbox" && <ManualAchievements userId={userId} platform="xbox" platformLabel="Xbox" />}
-      {tab === "playstation" && <ManualAchievements userId={userId} platform="playstation" platformLabel="PlayStation" />}
+      <TrackedGamesSection userId={userId} />
+      <SteamAchievements linkedSteamId={linkedSteamId} userId={userId} />
     </div>
   );
 }
@@ -422,6 +422,7 @@ function SteamAchievements({ linkedSteamId, userId }) {
                 <h3 className="achievement-group__title">
                   <img src={steamHeaderArt(g.appid)} alt="" className="achievement-group__thumb" loading="lazy" decoding="async" />
                   {g.name}
+                  <PlatformTag platform="steam" />
                   {rows && rows.length > 0 && (
                     <span className="score-badge">{unlockedCount}/{rows.length}</span>
                   )}
@@ -483,26 +484,32 @@ function SteamAchievements({ linkedSteamId, userId }) {
   );
 }
 
-function ManualAchievements({ userId, platform, platformLabel }) {
+// Xbox AND PlayStation together — one unified list, no per-platform tab.
+// The "Platform" selector below only scopes the track/add controls (which
+// library to pull from, which platform a manual entry belongs to); the
+// list underneath always shows every tracked game from both platforms at
+// once, each card tagged with its own PlatformTag.
+function TrackedGamesSection({ userId }) {
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState("loading");
+  const [platform, setPlatform] = useState("xbox");
   const [gameName, setGameName] = useState("");
   const [achievementName, setAchievementName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [libraryGames, setLibraryGames] = useState([]);
   const [libraryStatus, setLibraryStatus] = useState("idle"); // idle | loading | ready | error | not_linked
-  const [syncingTitleId, setSyncingTitleId] = useState(null);
+  const [syncingKey, setSyncingKey] = useState(null); // `${platform}:${id}` while that game is syncing
   const [syncError, setSyncError] = useState(null);
 
   async function load() {
     setStatus("loading");
     try {
-      const data = await fetchPlatformAchievements(userId, platform);
+      const data = await fetchAllPlatformAchievements(userId);
       setRows(data);
       setStatus("ready");
     } catch (err) {
-      console.error(`Failed to load ${platform} achievements:`, err);
+      console.error("Failed to load Xbox/PlayStation achievements:", err);
       setStatus("error");
     }
   }
@@ -510,7 +517,15 @@ function ManualAchievements({ userId, platform, platformLabel }) {
   useEffect(() => {
     if (userId) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, platform]);
+  }, [userId]);
+
+  // Switching the platform selector invalidates whatever library was
+  // already loaded — otherwise picking from a stale Xbox list right
+  // after flipping to PlayStation would sync the wrong platform's game.
+  useEffect(() => {
+    setLibraryGames([]);
+    setLibraryStatus("idle");
+  }, [platform]);
 
   async function handleAdd(e) {
     e.preventDefault();
@@ -564,80 +579,98 @@ function ManualAchievements({ userId, platform, platformLabel }) {
     setLibraryStatus("loading");
     setSyncError(null);
     try {
-      const { games } = platform === "xbox" ? await fetchXboxLibrary() : await fetchPsnLibrary();
-      setLibraryGames(games);
+      if (platform === "xbox") {
+        const { games } = await fetchXboxLibrary();
+        setLibraryGames(games.map((g) => ({ id: g.titleId, name: g.name })));
+      } else {
+        const { games } = await fetchPsnTrophyTitles();
+        setLibraryGames(games.map((g) => ({ id: g.npCommunicationId, serviceName: g.npServiceName, name: g.name })));
+      }
       setLibraryStatus("ready");
     } catch (err) {
-      console.error(`Failed to load ${platformLabel} library:`, err);
+      console.error(`Failed to load ${PLATFORM_LABELS[platform]} library:`, err);
       setLibraryStatus(/not linked/i.test(err.message) ? "not_linked" : "error");
     }
   }
 
-  async function handleTrackGame(game) {
-    setSyncingTitleId(game.titleId);
+  // platformArg/game are always explicit here (never read from the
+  // `platform` selector state) so a per-card Refresh always re-syncs
+  // that card's own platform, regardless of whatever the selector above
+  // currently shows.
+  async function handleTrackGame(platformArg, game) {
+    const key = `${platformArg}:${game.id}`;
+    setSyncingKey(key);
     setSyncError(null);
     try {
-      await syncPlatformGame(userId, platform, game.name, game.titleId);
+      await syncPlatformGame(userId, platformArg, game.name, game.id, game.serviceName);
       await load();
     } catch (err) {
-      console.error(`Failed to sync ${platformLabel} achievements:`, err);
+      console.error(`Failed to sync ${PLATFORM_LABELS[platformArg]} achievements:`, err);
       setSyncError(err.message);
     } finally {
-      setSyncingTitleId(null);
+      setSyncingKey(null);
     }
   }
 
-  const gameNames = [...new Set(rows.map((r) => r.game_name))];
-  const rowsByGame = gameNames.map((name) => ({
-    name,
-    achievements: rows.filter((r) => r.game_name === name),
-  }));
+  const groupKey = (r) => `${r.platform}:${r.game_name}`;
+  const rowsByGame = [...new Set(rows.map(groupKey))].map((key) => {
+    const sample = rows.find((r) => groupKey(r) === key);
+    return { key, platform: sample.platform, name: sample.game_name, achievements: rows.filter((r) => groupKey(r) === key) };
+  });
 
-  const untrackedLibraryGames = libraryGames.filter((g) => !gameNames.includes(g.name));
+  const platformGameNames = rows.filter((r) => r.platform === platform).map((r) => r.game_name);
+  const untrackedLibraryGames = libraryGames.filter((g) => !platformGameNames.includes(g.name));
 
   return (
     <>
       <div className="backlog-add">
+        <label className="currency-picker">
+          <span>Platform</span>
+          <select value={platform} onChange={(e) => setPlatform(e.target.value)}>
+            <option value="xbox">Xbox</option>
+            <option value="playstation">PlayStation</option>
+          </select>
+        </label>
         <button type="button" className="quickdash-reset-btn" onClick={loadLibrary} disabled={libraryStatus === "loading"}>
-          {libraryStatus === "loading" ? "Loading your library…" : `Load your ${platformLabel} library`}
+          {libraryStatus === "loading" ? "Loading your library…" : `Load your ${PLATFORM_LABELS[platform]} library`}
         </button>
         {libraryStatus === "not_linked" && (
-          <p className="panel__status">Link {platformLabel} in Account Linking first to sync real achievements.</p>
+          <p className="panel__status">Link {PLATFORM_LABELS[platform]} in Account Linking first to sync real achievements.</p>
         )}
         {libraryStatus === "error" && (
-          <p className="panel__status panel__status--error">Couldn't load your {platformLabel} library right now.</p>
+          <p className="panel__status panel__status--error">Couldn't load your {PLATFORM_LABELS[platform]} library right now.</p>
         )}
         {libraryStatus === "ready" && (
           untrackedLibraryGames.length === 0 ? (
-            <p className="panel__status">Every game in your {platformLabel} library is already tracked here.</p>
+            <p className="panel__status">Every trophy-eligible game in your {PLATFORM_LABELS[platform]} library is already tracked here.</p>
           ) : (
             <select
               className="price-search__input"
               value=""
-              disabled={syncingTitleId !== null}
+              disabled={syncingKey !== null}
               onChange={(e) => {
-                const game = untrackedLibraryGames.find((g) => String(g.titleId) === e.target.value);
-                if (game) handleTrackGame(game);
+                const game = untrackedLibraryGames.find((g) => String(g.id) === e.target.value);
+                if (game) handleTrackGame(platform, game);
               }}
             >
               <option value="">Pick a game to sync in…</option>
               {untrackedLibraryGames.map((g) => (
-                <option key={g.titleId} value={g.titleId}>{g.name}</option>
+                <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </select>
           )
         )}
-        {syncingTitleId && <p className="panel__status">Syncing real achievements…</p>}
+        {syncingKey && <p className="panel__status">Syncing real achievements…</p>}
         {syncError && <p className="panel__status panel__status--error">{syncError}</p>}
       </div>
 
-      <p className="panel__eyebrow">Or add one manually</p>
+      <p className="panel__eyebrow">Or add a {PLATFORM_LABELS[platform]} achievement/trophy manually</p>
       <form className="backlog-add" onSubmit={handleAdd}>
         <div className="price-search">
           <input
             className="price-search__input"
             type="text"
-            placeholder={`${platformLabel} game name…`}
+            placeholder={`${PLATFORM_LABELS[platform]} game name…`}
             list="platform-achievement-games"
             value={gameName}
             onChange={(e) => setGameName(e.target.value)}
@@ -668,7 +701,7 @@ function ManualAchievements({ userId, platform, platformLabel }) {
           />
         </div>
         <datalist id="platform-achievement-games">
-          {gameNames.map((name) => <option key={name} value={name} />)}
+          {[...new Set(platformGameNames)].map((name) => <option key={name} value={name} />)}
         </datalist>
         <datalist id="platform-achievement-categories">
           {[...new Set(rows.map((r) => r.category).filter(Boolean))].map((c) => <option key={c} value={c} />)}
@@ -677,11 +710,9 @@ function ManualAchievements({ userId, platform, platformLabel }) {
       </form>
 
       {status === "loading" && <p className="panel__status">Loading…</p>}
-      {status === "error" && <p className="panel__status panel__status--error">Couldn't load your {platformLabel} achievements.</p>}
+      {status === "error" && <p className="panel__status panel__status--error">Couldn't load your Xbox/PlayStation achievements.</p>}
       {status === "ready" && rows.length === 0 && (
-        <p className="panel__status">
-          Nothing tracked yet — add {platformLabel} achievements/trophies above as you earn them.
-        </p>
+        <p className="panel__status">Nothing tracked yet — sync a game from your library above, or add one manually.</p>
       )}
 
       {status === "ready" && rowsByGame.map((group) => {
@@ -689,20 +720,26 @@ function ManualAchievements({ userId, platform, platformLabel }) {
         const categoryOptions = [...new Set(group.achievements.map((a) => a.category).filter(Boolean))];
         const categoryGroups = groupRowsByCategory(group.achievements);
         const syncedRow = group.achievements.find((a) => a.source === "synced" && a.external_title_id);
+        const refreshKey = syncedRow && `${group.platform}:${syncedRow.external_title_id}`;
 
         return (
-          <div key={group.name} className="achievement-group">
+          <div key={group.key} className="achievement-group">
             <h3 className="achievement-group__title">
               {group.name}
+              <PlatformTag platform={group.platform} />
               <span className="score-badge">{unlockedCount}/{group.achievements.length}</span>
               {syncedRow && (
                 <button
                   type="button"
                   className="quickdash-reset-btn"
-                  onClick={() => handleTrackGame({ name: group.name, titleId: syncedRow.external_title_id })}
-                  disabled={syncingTitleId === syncedRow.external_title_id}
+                  onClick={() => handleTrackGame(group.platform, {
+                    id: syncedRow.external_title_id,
+                    name: group.name,
+                    serviceName: syncedRow.external_service_name,
+                  })}
+                  disabled={syncingKey === refreshKey}
                 >
-                  {syncingTitleId === syncedRow.external_title_id ? "Refreshing…" : "Refresh"}
+                  {syncingKey === refreshKey ? "Refreshing…" : "Refresh"}
                 </button>
               )}
             </h3>

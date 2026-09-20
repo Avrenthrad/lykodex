@@ -2812,6 +2812,20 @@ alter table public.platform_achievements add column if not exists external_title
 alter table public.platform_achievements add column if not exists icon_url text;
 alter table public.platform_achievements add column if not exists source text not null default 'manual' check (source in ('manual', 'synced'));
 
+-- PSN only: a title's own npServiceName (e.g. "trophy2" for PS5-native
+-- titles), needed alongside external_title_id (npCommunicationId) on
+-- every re-fetch. Confirmed live that PSN's general "played games" list
+-- (fetchPsnLibrary) does NOT carry an ID usable against the trophy
+-- endpoints at all — a real account's played-games titleId 404s outright
+-- against them. The correct source is PSN's own trophyTitles endpoint
+-- (GET /trophy/v1/users/{accountId}/trophyTitles), which returns each
+-- trophy-eligible game's real npCommunicationId AND the exact
+-- npServiceName to use with it — no guessing required, so
+-- psnFetchMergedTrophiesForTitle's earlier "try none, fall back to
+-- npServiceName=trophy on 404" was also wrong: the real value for a
+-- PS5-native title is "trophy2", not "trophy". Null for Xbox rows.
+alter table public.platform_achievements add column if not exists external_service_name text;
+
 create table public.steam_achievement_categories (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
