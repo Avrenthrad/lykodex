@@ -4,7 +4,6 @@
 // no infrastructure for future products — see lib/tabletop.js.
 
 import { useEffect, useState } from "react";
-import CollegePageTitle from "./CollegePageTitle";
 import {
   fetchCampaigns, createCampaign, deleteCampaign,
   fetchCharacters, createCharacter, deleteCharacter,
@@ -45,7 +44,6 @@ export default function TabletopHomePage({ onBack, isLoggedIn, userId, onSignIn,
       <div className="price-page">
         <div className="price-page__head">
           <button type="button" className="back-link" onClick={onBack}>← Back to Overview</button>
-          <CollegePageTitle collegeId="tabletop" />
           <p className="price-page__subtitle">Real campaigns, real session hours, real game history.</p>
         </div>
         <div className="backlog-add">
@@ -60,7 +58,6 @@ export default function TabletopHomePage({ onBack, isLoggedIn, userId, onSignIn,
     <div className="price-page">
       <div className="price-page__head">
         <button type="button" className="back-link" onClick={onBack}>← Back to Overview</button>
-        <CollegePageTitle collegeId="tabletop" />
         <p className="price-page__subtitle">Real campaigns and armies — yours, tracked honestly.</p>
       </div>
 

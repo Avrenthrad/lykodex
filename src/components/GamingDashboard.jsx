@@ -5,7 +5,6 @@
 // component's own header comment for where its data comes from); no
 // invented ranks/reputation/missions/combat stats.
 
-import CollegePageTitle from "./CollegePageTitle";
 import ProfileHeading from "./ProfileHeading";
 import SteamPresenceCard from "./SteamPresenceCard";
 import GamingPresenceCard from "./GamingPresenceCard";
@@ -26,10 +25,6 @@ export default function GamingDashboard({
 }) {
   return (
     <>
-      <div className="gaming-college-head">
-        <CollegePageTitle collegeId="gaming" />
-      </div>
-
       <ProfileHeading
         isLoggedIn={isLoggedIn}
         avatarUrl={avatarUrl}

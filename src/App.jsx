@@ -13,8 +13,9 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
 import Header from "./components/Header";
-import { getCollegeSidebarForView } from "./lib/navSections";
+import { getCollegeSidebarForView, getCollegeHeroForView } from "./lib/navSections";
 import CollegeSidebar from "./components/CollegeSidebar";
+import CollegeHeroBanner from "./components/CollegeHeroBanner";
 import { useCollegeSidebarState } from "./hooks/useCollegeSidebarState";
 import OnboardingCollegePicker from "./components/OnboardingCollegePicker";
 import LoginPage from "./components/LoginPage";
@@ -180,6 +181,7 @@ export default function App() {
   const [gridWidth, setGridWidth] = useState(0);
 
   const sidebarConfig = getCollegeSidebarForView(view);
+  const heroCollegeId = getCollegeHeroForView(view);
   const [collegeSidebarOpen, setCollegeSidebarOpen] = useCollegeSidebarState(sidebarConfig?.collegeId ?? null);
 
   // Universal command palette — Ctrl/Cmd+K from anywhere, or the
@@ -303,7 +305,8 @@ export default function App() {
           onOpenPalette={() => setPaletteOpen(true)}
         />
 
-        <div className="dash-layout">
+        <div className={`dash-layout${heroCollegeId ? " dash-layout--with-hero" : ""}`}>
+          {heroCollegeId && <CollegeHeroBanner collegeId={heroCollegeId} />}
           {sidebarConfig && (
             <CollegeSidebar
               collegeId={sidebarConfig.collegeId}

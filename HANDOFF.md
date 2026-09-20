@@ -180,15 +180,15 @@ purely so that setup is fully recoverable if/when mobile work resumes.
     applied directly to production via Supabase MCP and mirrored in
     `schema.sql`; `get_advisors` checked clean after each.
 
-- 2026-09-01 — **Note for Cursor: college overview banners — hero
-  animation requested.** User wants each College's overview banner
-  (currently a static header image per College, e.g. the Gaming
-  banner) turned into a hero animation that extends the full width of
-  the page, themed to that specific College (Gaming/TCG/Library/Loot/
-  Wartable each get their own look, not one shared treatment). Not
-  scoped or started — just capturing the request here since it's
-  V0/UI-generation + wiring territory, not something Claude Code
-  picked up this session.
+- 2026-09-01 — **College overview hero banners — done (Cursor).**
+  Full-width animated hero on each College home only (`dashboard`,
+  `tcg-home`, `college-entertainment`, `college-collectibles`,
+  `college-tabletop`). New `CollegeHeroBanner.jsx` +
+  `getCollegeHeroForView()` in `navSections.js`; wired in `App.jsx`
+  above the sidebar/content row. Per-college canvas themes (Gaming
+  scanlines, TCG cards, Library film/play marks, Loot sparkles,
+  Wartable hex + dice). Compact `CollegePageTitle` removed from those
+  home pages (banner replaces them). Respects `prefers-reduced-motion`.
 
 - 2026-09-01 — **Emergency production outage in `api/pricing.js`,
   found and fixed — root cause was NOT what it first looked like.**
