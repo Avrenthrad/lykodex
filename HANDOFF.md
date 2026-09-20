@@ -134,6 +134,52 @@ purely so that setup is fully recoverable if/when mobile work resumes.
 
 ## In progress / recently touched (most recent first)
 
+- 2026-09-20 — **Achievement Tracker (Gaming sidebar, renamed from
+  "Achievements"): collapsible trophy categories + real Xbox/PlayStation
+  sync. PR #5, not yet merged.** Two pieces:
+  - **Collapsible categories**, matching an IGN trophy-guide layout the
+    user pointed at: achievements/trophies group into named sections
+    (Story, Collectibles, etc.) that auto-collapse once everything
+    inside is checked off, so you don't scroll past what's finished — a
+    click always overrides the default either way. Applies to Steam
+    (`AchievementsPage.jsx`'s `CategorySection`/`CategoryTagInput`) and
+    the manual Xbox/PS tracker. Steam achievements get a new
+    `steam_achievement_categories` table for tagging (Steam's schema has
+    no grouping of its own); the manual tracker got a `category` column
+    directly on `platform_achievements`.
+  - **Real Xbox/PlayStation achievement sync (new capability, not just
+    UI).** You can now pick a game from your own already-linked Xbox/PSN
+    library (`fetchXboxLibrary`/`fetchPsnLibrary`, both pre-existing) and
+    pull its real achievement/trophy list — same auto-crossing-off Steam
+    already had. A **Refresh** button re-syncs a tracked game's unlock
+    state. This corrects an earlier assumption baked into this codebase's
+    own comments ("neither platform has a public API for a person's own
+    achievement/trophy list") — untrue for real per-title data: Xbox
+    Live's `achievements.xboxlive.com` and PSN's per-`npCommunicationId`
+    trophy endpoints both work with the exact same tokens already stored
+    in `xbox_tokens`/`psn_tokens`, confirmed against the same reference
+    implementations (OpenXbox/xbox-webapi-python, achievements-app/psn-
+    api) already cited throughout `api/pricing.js`. New server modes:
+    `service=xbox&mode=achievements` (body `{titleId}`),
+    `service=psn&mode=title-trophies` (body `{npCommunicationId}` — PSN
+    needs a fallback attempt with `npServiceName=trophy` for PS4/PS3/
+    Vita titles since PS5-native titles omit it and there's no reliable
+    field to tell which up front ahead of a 404). Synced rows live in
+    the same `platform_achievements` table as manual ones (new
+    `external_id`/`external_title_id`/`icon_url`/`source` columns) —
+    a refresh only ever touches unlock state/description/icon, so a
+    person's own category tag on a synced achievement survives every
+    future refresh untouched.
+  - **Not yet live-tested against a real Xbox/PSN account** — no linked
+    account was available in that session. Worth a real smoke test
+    before/after merging PR #5; this repo's own history shows this exact
+    class of Xbox/PSN unofficial-API integration has needed a live debug
+    round before (see the "Fix real Xbox/PSN library-import 400s found
+    via live error bodies" commits below).
+  - All four migrations (category columns/table, sync columns) were
+    applied directly to production via Supabase MCP and mirrored in
+    `schema.sql`; `get_advisors` checked clean after each.
+
 - 2026-09-01 — **Note for Cursor: college overview banners — hero
   animation requested.** User wants each College's overview banner
   (currently a static header image per College, e.g. the Gaming
