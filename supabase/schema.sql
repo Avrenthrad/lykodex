@@ -2768,4 +2768,39 @@ create policy "Users can remove their own media library items"
 create index media_library_items_user_id_idx on public.media_library_items (user_id);
 -- Exact-case match, same reasoning as game_library_items: titles come
 -- consistently from each import source's own casing.
+
+-- ---------- Achievement/trophy categories (additive) ----------
+-- Lets trophies/achievements be grouped into named sections (Story,
+-- Combat, Collectibles, etc.) so AchievementsPage can collapse a section
+-- once everything in it is checked off — same "close off what you've
+-- finished" layout as IGN's trophy-guide wikis.
+--
+-- Xbox/PlayStation's manual tracker (platform_achievements) gets the
+-- column directly since the app owns every row there. Steam has no
+-- category data of its own (see platform_achievements' comment above)
+-- and its achievement rows are a live view, never stored — so tagging a
+-- Steam achievement needs its own small table keyed by (appid, apiname),
+-- independent of unlock state (which always stays a live read from
+-- Steam).
+alter table public.platform_achievements add column if not exists category text;
+
+create table public.steam_achievement_categories (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  appid bigint not null,
+  apiname text not null,
+  category text not null,
+  updated_at timestamptz default now(),
+  unique (user_id, appid, apiname)
+);
+
+alter table public.steam_achievement_categories enable row level security;
+
+create policy "Users can manage their own Steam achievement categories"
+  on public.steam_achievement_categories for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create index steam_achievement_categories_user_appid_idx
+  on public.steam_achievement_categories (user_id, appid);
 create unique index media_library_items_user_source_title_idx on public.media_library_items (user_id, source, title);

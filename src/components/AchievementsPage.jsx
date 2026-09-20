@@ -13,7 +13,7 @@
 // work around). The person types in what they're tracking and ticks
 // it off as they earn it.
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   fetchOwnedGames,
   fetchAchievementSchema,
@@ -26,8 +26,95 @@ import {
   addPlatformAchievement,
   toggleAchievementUnlocked,
   deletePlatformAchievement,
+  updateAchievementCategory,
 } from "../lib/platformAchievements";
+import { fetchSteamAchievementCategories, setSteamAchievementCategory } from "../lib/steamAchievementCategories";
 import { recordGameCompletionIfNew } from "../lib/achievements";
+
+// Splits a flat achievement/trophy list into named sections, preserving
+// first-seen order. Anything with no category lands in one "Achievements"
+// bucket rather than being dropped — so a game nobody has tagged yet
+// still gets the collapse-on-completion behavior below, just as a single
+// section.
+function groupRowsByCategory(rows) {
+  const order = [];
+  const byCategory = new Map();
+  rows.forEach((row) => {
+    const key = row.category?.trim() || "Achievements";
+    if (!byCategory.has(key)) {
+      byCategory.set(key, []);
+      order.push(key);
+    }
+    byCategory.get(key).push(row);
+  });
+  return order.map((category) => ({ category, rows: byCategory.get(category) }));
+}
+
+// One collapsible section (e.g. "Story", "Collectibles"). Defaults to
+// collapsed once every achievement inside is unlocked/checked off — the
+// "closes off what you've finished so you don't have to scroll past it"
+// layout from IGN's trophy guides — but a click always overrides that
+// default in either direction for the rest of the visit.
+function CategorySection({ title, rows, children }) {
+  const total = rows.length;
+  const unlockedCount = rows.filter((r) => r.unlocked).length;
+  const complete = total > 0 && unlockedCount === total;
+  const [manualOverride, setManualOverride] = useState(null);
+  const collapsed = manualOverride ?? complete;
+
+  return (
+    <div className={`achievement-category ${complete ? "achievement-category--complete" : ""}`}>
+      <button
+        type="button"
+        className="achievement-category__header"
+        onClick={() => setManualOverride(!collapsed)}
+        aria-expanded={!collapsed}
+      >
+        <span className="achievement-category__chevron" aria-hidden="true">{collapsed ? "▶" : "▼"}</span>
+        <span className="achievement-category__title">{title}</span>
+        <span className="score-badge">{unlockedCount}/{total}</span>
+      </button>
+      {!collapsed && <div className="achievement-category__body">{children}</div>}
+    </div>
+  );
+}
+
+// Inline "type to tag a category" control, reused by both the live Steam
+// rows and the manual Xbox/PlayStation rows. Commits on blur/Enter only
+// when the value actually changed, so it doesn't fire a write on every
+// row just from tabbing through the list.
+function CategoryTagInput({ value, categoryOptions, onCommit }) {
+  const [draft, setDraft] = useState(value || "");
+  const listId = useId();
+
+  useEffect(() => { setDraft(value || ""); }, [value]);
+
+  return (
+    <>
+      <input
+        type="text"
+        className="achievement-row__category-input"
+        placeholder="Add category…"
+        list={listId}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const trimmed = draft.trim();
+          if (trimmed !== (value || "")) onCommit(trimmed);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
+      />
+      <datalist id={listId}>
+        {categoryOptions.map((c) => <option key={c} value={c} />)}
+      </datalist>
+    </>
+  );
+}
 
 const GAMES_PER_PAGE = 5;
 
@@ -148,8 +235,14 @@ function SteamAchievements({ linkedSteamId, userId }) {
 
     Promise.all(
       pageGames.map((g) =>
-        fetchMergedAchievements(linkedSteamId, g.appid)
-          .then((rows) => ({ appid: g.appid, rows }))
+        Promise.all([
+          fetchMergedAchievements(linkedSteamId, g.appid),
+          fetchSteamAchievementCategories(userId, g.appid).catch(() => ({})),
+        ])
+          .then(([rows, categories]) => ({
+            appid: g.appid,
+            rows: rows.map((row) => ({ ...row, category: categories[row.apiname] || "" })),
+          }))
           .catch(() => ({ appid: g.appid, rows: null })) // null = failed/no achievements
       )
     ).then((results) => {
@@ -196,10 +289,20 @@ function SteamAchievements({ linkedSteamId, userId }) {
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, games, linkedSteamId]);
+  }, [page, games, linkedSteamId, userId]);
 
   if (!linkedSteamId) {
     return <p className="panel__status">Link Steam to see your real achievement lists here.</p>;
+  }
+
+  function handleSetCategory(appid, apiname, category) {
+    setPageRows((prev) => ({
+      ...prev,
+      [appid]: (prev[appid] || []).map((r) => (r.apiname === apiname ? { ...r, category } : r)),
+    }));
+    setSteamAchievementCategory(userId, appid, apiname, category).catch((err) => {
+      console.error("Failed to update Steam achievement category:", err);
+    });
   }
 
   return (
@@ -281,12 +384,9 @@ function SteamAchievements({ linkedSteamId, userId }) {
 
           {pageGames.map((g) => {
             const rows = pageRows[g.appid];
-            const filteredRows = (rows || []).filter((r) => {
-              if (filter === "unlocked") return r.unlocked;
-              if (filter === "locked") return !r.unlocked;
-              return true;
-            });
             const unlockedCount = (rows || []).filter((r) => r.unlocked).length;
+            const categoryOptions = [...new Set((rows || []).map((r) => r.category).filter(Boolean))];
+            const categoryGroups = groupRowsByCategory(rows || []);
 
             return (
               <div key={g.appid} className="achievement-group">
@@ -302,33 +402,49 @@ function SteamAchievements({ linkedSteamId, userId }) {
                 {rows === null && <p className="panel__status panel__status--error">Couldn't load achievements for this game.</p>}
                 {rows && rows.length === 0 && <p className="panel__status">No Steam achievements for this game.</p>}
 
-                {rows && rows.length > 0 && (
-                  <ul className="achievement-list">
-                    {filteredRows.map((row) => (
-                      <li key={row.apiname} className={`achievement-row ${row.unlocked ? "achievement-row--unlocked" : ""}`}>
-                        <img
-                          src={row.unlocked ? row.icon : row.icongray || row.icon}
-                          alt=""
-                          className="achievement-row__icon"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <div className="achievement-row__body">
-                          <span className="achievement-row__name">{row.displayName}</span>
-                          {row.description && <span className="achievement-row__desc">{row.description}</span>}
-                          {row.unlocked && row.unlockedAt && (
-                            <span className="achievement-row__desc">Unlocked {relativeTime(row.unlockedAt)}</span>
-                          )}
-                        </div>
-                        {row.rarity != null && (
-                          <span className="score-badge" title="Percentage of all Steam players who've unlocked this">
-                            {row.rarity.toFixed(1)}% of players
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {categoryGroups.map((group) => {
+                  const visibleRows = group.rows.filter((r) => {
+                    if (filter === "unlocked") return r.unlocked;
+                    if (filter === "locked") return !r.unlocked;
+                    return true;
+                  });
+                  if (visibleRows.length === 0) return null;
+
+                  return (
+                    <CategorySection key={group.category} title={group.category} rows={group.rows}>
+                      <ul className="achievement-list">
+                        {visibleRows.map((row) => (
+                          <li key={row.apiname} className={`achievement-row ${row.unlocked ? "achievement-row--unlocked" : ""}`}>
+                            <img
+                              src={row.unlocked ? row.icon : row.icongray || row.icon}
+                              alt=""
+                              className="achievement-row__icon"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                            <div className="achievement-row__body">
+                              <span className="achievement-row__name">{row.displayName}</span>
+                              {row.description && <span className="achievement-row__desc">{row.description}</span>}
+                              {row.unlocked && row.unlockedAt && (
+                                <span className="achievement-row__desc">Unlocked {relativeTime(row.unlockedAt)}</span>
+                              )}
+                              <CategoryTagInput
+                                value={row.category}
+                                categoryOptions={categoryOptions}
+                                onCommit={(category) => handleSetCategory(g.appid, row.apiname, category)}
+                              />
+                            </div>
+                            {row.rarity != null && (
+                              <span className="score-badge" title="Percentage of all Steam players who've unlocked this">
+                                {row.rarity.toFixed(1)}% of players
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </CategorySection>
+                  );
+                })}
               </div>
             );
           })}
@@ -344,6 +460,7 @@ function ManualAchievements({ userId, platform, platformLabel }) {
   const [gameName, setGameName] = useState("");
   const [achievementName, setAchievementName] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
 
   async function load() {
     setStatus("loading");
@@ -370,9 +487,11 @@ function ManualAchievements({ userId, platform, platformLabel }) {
         gameName: gameName.trim(),
         achievementName: achievementName.trim(),
         description: description.trim(),
+        category: category.trim(),
       });
       setAchievementName("");
       setDescription("");
+      setCategory("");
       load();
     } catch (err) {
       console.error("Failed to add achievement:", err);
@@ -385,6 +504,16 @@ function ManualAchievements({ userId, platform, platformLabel }) {
       await toggleAchievementUnlocked(row.id, !row.unlocked);
     } catch (err) {
       console.error("Failed to update achievement:", err);
+      load();
+    }
+  }
+
+  async function handleSetCategory(row, newCategory) {
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, category: newCategory } : r)));
+    try {
+      await updateAchievementCategory(row.id, newCategory);
+    } catch (err) {
+      console.error("Failed to update achievement category:", err);
       load();
     }
   }
@@ -424,15 +553,28 @@ function ManualAchievements({ userId, platform, platformLabel }) {
             onChange={(e) => setAchievementName(e.target.value)}
           />
         </div>
-        <input
-          className="price-search__input"
-          type="text"
-          placeholder="Description (optional)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
+        <div className="price-search">
+          <input
+            className="price-search__input"
+            type="text"
+            placeholder="Description (optional)"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <input
+            className="price-search__input"
+            type="text"
+            placeholder="Category, e.g. Story (optional)"
+            list="platform-achievement-categories"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          />
+        </div>
         <datalist id="platform-achievement-games">
           {gameNames.map((name) => <option key={name} value={name} />)}
+        </datalist>
+        <datalist id="platform-achievement-categories">
+          {[...new Set(rows.map((r) => r.category).filter(Boolean))].map((c) => <option key={c} value={c} />)}
         </datalist>
         <button type="submit" className="price-search__button">Add</button>
       </form>
@@ -447,26 +589,37 @@ function ManualAchievements({ userId, platform, platformLabel }) {
 
       {status === "ready" && rowsByGame.map((group) => {
         const unlockedCount = group.achievements.filter((a) => a.unlocked).length;
+        const categoryOptions = [...new Set(group.achievements.map((a) => a.category).filter(Boolean))];
+        const categoryGroups = groupRowsByCategory(group.achievements);
         return (
           <div key={group.name} className="achievement-group">
             <h3 className="achievement-group__title">
               {group.name}
               <span className="score-badge">{unlockedCount}/{group.achievements.length}</span>
             </h3>
-            <ul className="achievement-list">
-              {group.achievements.map((row) => (
-                <li key={row.id} className={`achievement-row ${row.unlocked ? "achievement-row--unlocked" : ""}`}>
-                  <label className="achievement-row__checkbox">
-                    <input type="checkbox" checked={row.unlocked} onChange={() => handleToggle(row)} />
-                  </label>
-                  <div className="achievement-row__body">
-                    <span className="achievement-row__name">{row.achievement_name}</span>
-                    {row.description && <span className="achievement-row__desc">{row.description}</span>}
-                  </div>
-                  <button type="button" className="game-popup__close" onClick={() => handleDelete(row)} aria-label="Remove">✕</button>
-                </li>
-              ))}
-            </ul>
+            {categoryGroups.map((catGroup) => (
+              <CategorySection key={catGroup.category} title={catGroup.category} rows={catGroup.rows}>
+                <ul className="achievement-list">
+                  {catGroup.rows.map((row) => (
+                    <li key={row.id} className={`achievement-row ${row.unlocked ? "achievement-row--unlocked" : ""}`}>
+                      <label className="achievement-row__checkbox">
+                        <input type="checkbox" checked={row.unlocked} onChange={() => handleToggle(row)} />
+                      </label>
+                      <div className="achievement-row__body">
+                        <span className="achievement-row__name">{row.achievement_name}</span>
+                        {row.description && <span className="achievement-row__desc">{row.description}</span>}
+                        <CategoryTagInput
+                          value={row.category}
+                          categoryOptions={categoryOptions}
+                          onCommit={(newCategory) => handleSetCategory(row, newCategory)}
+                        />
+                      </div>
+                      <button type="button" className="game-popup__close" onClick={() => handleDelete(row)} aria-label="Remove">✕</button>
+                    </li>
+                  ))}
+                </ul>
+              </CategorySection>
+            ))}
           </div>
         );
       })}

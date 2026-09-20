@@ -898,6 +898,63 @@ button { font-family: inherit; }
   flex-shrink: 0;
 }
 
+.achievement-category {
+  margin: 14px 0;
+}
+
+.achievement-category__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 6px 2px;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+}
+
+.achievement-category__chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.achievement-category__title {
+  flex: 1;
+}
+
+.achievement-category--complete .achievement-category__title {
+  color: var(--text-muted);
+}
+
+.achievement-category__body {
+  margin-top: 6px;
+}
+
+.achievement-row__category-input {
+  margin-top: 4px;
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  width: fit-content;
+  max-width: 140px;
+}
+
+.achievement-row__category-input:focus {
+  border-style: solid;
+  color: var(--text);
+  outline: none;
+}
+
 .achievement-pager {
   display: flex;
   align-items: center;
