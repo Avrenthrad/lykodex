@@ -1,8 +1,12 @@
-// Xbox/PlayStation manual achievement/trophy tracker — see
-// platform_achievements in schema.sql for why this exists and why
-// game_name is free text rather than a foreign key. Steam achievements
-// never go through here; they're a live view of lib/steam.js's real
-// API data (see AchievementsPage.jsx).
+// Xbox/PlayStation achievement/trophy tracker — see platform_achievements
+// in schema.sql for why this exists and why game_name is free text
+// rather than a foreign key. A row is either typed in by hand (source =
+// 'manual') or synced from the person's own real Xbox/PSN library
+// (source = 'synced', see upsertSyncedAchievements below and
+// AchievementsPage.jsx's game-picker) — both live in the same table and
+// render through the same list/category UI either way. Steam
+// achievements never go through here at all; they're a live view of
+// lib/steam.js's real API data (see AchievementsPage.jsx).
 
 import { supabase } from "./supabaseClient";
 
@@ -46,6 +50,34 @@ export async function updateAchievementCategory(achievementId, category) {
     .from("platform_achievements")
     .update({ category: category || null })
     .eq("id", achievementId);
+  if (error) throw error;
+}
+
+// Real Xbox/PSN achievement sync — upserts on the same (user_id,
+// platform, game_name, achievement_name) constraint manual rows already
+// use, so a "Refresh" only ever touches unlocked/unlocked_at/
+// description/icon_url. category is deliberately left out of every row
+// here: an upsert only overwrites the columns it's given, so a person's
+// own category tag on a previously-synced achievement survives every
+// future refresh untouched. achievements come from fetchXboxAchievements
+// (externalId -> id) or fetchPsnTitleTrophies (externalId -> trophyId).
+export async function upsertSyncedAchievements(userId, platform, gameName, externalTitleId, achievements) {
+  const rows = achievements.map((a) => ({
+    user_id: userId,
+    platform,
+    game_name: gameName,
+    achievement_name: a.name,
+    description: a.description || null,
+    icon_url: a.icon || null,
+    external_id: String(a.externalId),
+    external_title_id: String(externalTitleId),
+    source: "synced",
+    unlocked: a.unlocked,
+    unlocked_at: a.unlockedAt || null,
+  }));
+  const { error } = await supabase
+    .from("platform_achievements")
+    .upsert(rows, { onConflict: "user_id,platform,game_name,achievement_name" });
   if (error) throw error;
 }
 

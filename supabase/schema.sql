@@ -2784,6 +2784,34 @@ create index media_library_items_user_id_idx on public.media_library_items (user
 -- Steam).
 alter table public.platform_achievements add column if not exists category text;
 
+-- ---------- Real Xbox/PlayStation achievement sync (additive) ----------
+-- The comment on platform_achievements above ("neither platform has a
+-- public API") turned out to be wrong for real per-title data: Xbox
+-- Live's achievements.xboxlive.com and PSN's per-npCommunicationId
+-- trophy endpoints both work today with the exact same tokens already
+-- stored in xbox_tokens/psn_tokens for gamerscore/trophy-count and
+-- library — unofficial and undocumented (Sony/Microsoft could change
+-- them without notice), but real, confirmed against the same reference
+-- implementations (OpenXbox/xbox-webapi-python, achievements-app/
+-- psn-api) already cited throughout api/pricing.js. See
+-- AchievementsPage.jsx's ManualAchievements for the "pick a game from
+-- your real library, then Refresh" flow this powers.
+--
+-- A synced row lives in this same table, not a separate one — a
+-- "Refresh" upserts on the existing (user_id, platform, game_name,
+-- achievement_name) unique constraint, updating only unlocked/
+-- unlocked_at/description/icon_url, so a person's own category tag on
+-- a synced achievement survives every future refresh untouched.
+-- external_id is the achievement/trophy's own id (Xbox achievement id
+-- / PSN trophyId); external_title_id is the game's id (Xbox titleId /
+-- PSN npCommunicationId) — carried on every row for that game so the
+-- per-game Refresh button knows what to re-fetch without a second
+-- table just to remember "which games are tracked."
+alter table public.platform_achievements add column if not exists external_id text;
+alter table public.platform_achievements add column if not exists external_title_id text;
+alter table public.platform_achievements add column if not exists icon_url text;
+alter table public.platform_achievements add column if not exists source text not null default 'manual' check (source in ('manual', 'synced'));
+
 create table public.steam_achievement_categories (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,

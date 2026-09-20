@@ -170,3 +170,12 @@ export async function fetchXboxLibrary() {
 export async function fetchXboxWishlist() {
   return callXboxService("wishlist");
 }
+
+// Real per-title achievement list — { achievements: [{ id, name,
+// description, icon, unlocked, unlockedAt, gamerscore, rarity }] }.
+// titleId comes from fetchXboxLibrary's own titleId, same account this
+// achievement list belongs to. See AchievementsPage.jsx for the
+// "pick a game from your real library, then sync/refresh" flow.
+export async function fetchXboxAchievements(titleId) {
+  return callXboxService("achievements", { titleId });
+}

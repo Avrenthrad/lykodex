@@ -32,11 +32,13 @@
 //   POST /api/pricing?service=xbox&mode=presence, Authorization: Bearer <token>
 //   POST /api/pricing?service=xbox&mode=library, Authorization: Bearer <token>
 //   POST /api/pricing?service=xbox&mode=wishlist, Authorization: Bearer <token>
+//   POST /api/pricing?service=xbox&mode=achievements, Authorization: Bearer <token>, body {titleId}
 //   POST /api/pricing?service=psn&mode=link, Authorization: Bearer <token>, body {npsso}
 //   POST /api/pricing?service=psn&mode=trophies, Authorization: Bearer <token>
 //   POST /api/pricing?service=psn&mode=presence, Authorization: Bearer <token>
 //   POST /api/pricing?service=psn&mode=library, Authorization: Bearer <token>
 //   POST /api/pricing?service=psn&mode=wishlist, Authorization: Bearer <token>
+//   POST /api/pricing?service=psn&mode=title-trophies, Authorization: Bearer <token>, body {npCommunicationId}
 //   POST /api/pricing?service=lykodex-session, Authorization: Bearer <caller's access token>
 //   GET  /api/pricing?service=mastery-cron, Authorization: Bearer <CRON_SECRET> (Vercel Cron only, see vercel.json)
 
@@ -702,6 +704,89 @@ async function getLiveXboxLibrary(adminClient, userId) {
   return { games };
 }
 
+// Real per-title achievement list confirmed against OpenXbox/xbox-
+// webapi-python's AchievementsProvider (not guessed) — same
+// Authorization scheme as the other Xbox calls, achievements.xboxlive.com
+// instead of titlehub. progressState is "Achieved" once unlocked;
+// timeUnlocked only populates then. mediaAssets carries the real icon
+// (type "Icon"); rewards carries the real Gamerscore value for this
+// achievement specifically (titlehub's currentGamerscore/
+// totalGamerscore above is only the title's running total, not a
+// per-achievement breakdown).
+async function xboxFetchAchievements(userhash, xstsToken, xuid, titleId) {
+  const url = `https://achievements.xboxlive.com/users/xuid(${xuid})/achievements?titleId=${titleId}&maxItems=1000`;
+  const res = await fetch(url, {
+    headers: {
+      "x-xbl-contract-version": "2",
+      Accept: "application/json",
+      "Accept-Language": "en-US",
+      Authorization: `XBL3.0 x=${userhash};${xstsToken}`,
+    },
+  });
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "");
+    throw new Error(`Xbox Live achievements request failed (${res.status})${bodyText ? `: ${bodyText.slice(0, 300)}` : ""}`);
+  }
+  const data = await res.json();
+  return (data.achievements || []).map((a) => {
+    const unlocked = a.progressState === "Achieved";
+    return {
+      id: a.id,
+      name: a.name,
+      description: (unlocked ? a.description : a.lockedDescription || a.description) || "",
+      icon: a.mediaAssets?.find((m) => m.type === "Icon")?.url || null,
+      unlocked,
+      unlockedAt: a.progression?.timeUnlocked || null,
+      gamerscore: Number(a.rewards?.find((r) => r.type === "Gamerscore")?.value) || 0,
+      rarity: a.rarity?.currentPercentage != null ? Number(a.rarity.currentPercentage) : null,
+    };
+  });
+}
+
+// Same refresh-if-needed pattern as getLiveXboxGamerscore/
+// getLiveXboxLibrary above, calling xboxFetchAchievements at the end.
+async function getLiveXboxAchievements(adminClient, userId, titleId) {
+  const { data: stored, error: fetchError } = await adminClient.from("xbox_tokens").select("*").eq("user_id", userId).maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!stored) return "not_linked";
+
+  let { userhash, xuid, xsts_token: xstsToken } = stored;
+  const xstsExpired = new Date(stored.xsts_expires_at).getTime() < Date.now();
+  const msExpired = new Date(stored.ms_expires_at).getTime() < Date.now();
+
+  if (xstsExpired) {
+    let msAccessToken = stored.ms_access_token;
+    let newMsFields = null;
+    if (msExpired) {
+      if (!stored.ms_refresh_token) return "expired";
+      const refreshed = await xboxOAuthTokenRequest({ grant_type: "refresh_token", refresh_token: stored.ms_refresh_token, scope: "Xboxlive.signin Xboxlive.offline_access" }, { usePublicClient: stored.is_public_client });
+      msAccessToken = refreshed.access_token;
+      newMsFields = {
+        ms_access_token: refreshed.access_token,
+        ms_refresh_token: refreshed.refresh_token || stored.ms_refresh_token,
+        ms_expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
+      };
+    }
+    const userTokenResp = await xboxRequestUserToken(msAccessToken);
+    const xsts = await xboxRequestXstsToken(userTokenResp.Token);
+    const claims = xsts.DisplayClaims.xui[0];
+    userhash = claims.uhs;
+    xuid = claims.xid;
+    xstsToken = xsts.Token;
+    await adminClient.from("xbox_tokens").update({
+      ...(newMsFields || {}),
+      xsts_token: xsts.Token,
+      xsts_expires_at: xsts.NotAfter,
+      userhash: claims.uhs,
+      xuid: claims.xid,
+      updated_at: new Date().toISOString(),
+    }).eq("user_id", userId);
+  }
+
+  const achievements = await xboxFetchAchievements(userhash, xstsToken, xuid, titleId);
+  return { achievements };
+}
+
 // Microsoft doesn't document a public wishlist list API for third-party
 // apps — xbox.com loads it through internal emerald routes that need
 // extra S2S headers we can't obtain from a normal OAuth link. This
@@ -885,6 +970,17 @@ async function handleXbox(req, searchParams, res) {
       return res.status(200).json(result);
     }
 
+    if (mode === "achievements") {
+      if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+      const { userId, adminClient } = await verifyCallerAndGetAdminClient(req);
+      const { titleId } = req.body || {};
+      if (!titleId) return res.status(400).json({ error: "Missing titleId" });
+      const result = await getLiveXboxAchievements(adminClient, userId, titleId);
+      if (result === "not_linked") return res.status(404).json({ error: "Xbox not linked" });
+      if (result === "expired") return res.status(401).json({ error: "Xbox link expired — please re-link" });
+      return res.status(200).json(result);
+    }
+
     if (mode === "unlink") {
       if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
       const { userId, adminClient } = await verifyCallerAndGetAdminClient(req);
@@ -1045,6 +1141,99 @@ async function psnFetchLibrary(accessToken, accountId) {
     imageUrl: t.imageUrl || null,
     lastPlayed: t.lastPlayedDateTime || null,
   }));
+}
+
+// Real per-title trophy list confirmed against achievements-app/psn-
+// api's getTitleTrophies/getUserTrophiesEarnedForTitle implementation
+// (not guessed) — two calls merged by trophyId, same "definitions +
+// player state" split Steam's own achievement merge already uses
+// (lib/achievements.js's fetchMergedAchievements): getTitleTrophies has
+// the real name/description/icon/hidden/type for every trophy that
+// exists; getUserTrophiesEarnedForTitle has this account's real
+// earned/earnedDateTime/rarity for each. titleId from psnFetchLibrary
+// above IS the npCommunicationId these calls want — same field, no
+// extra lookup (per psn-api's own documented usage).
+async function psnFetchTitleTrophyDefinitions(accessToken, npCommunicationId, npServiceName) {
+  const query = npServiceName ? `?npServiceName=${npServiceName}` : "";
+  const url = `https://m.np.playstation.com/api/trophy/v1/npCommunicationIds/${npCommunicationId}/trophyGroups/all/trophies${query}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw Object.assign(new Error(`PSN trophy definitions request failed (${res.status})`), { status: res.status });
+  const data = await res.json();
+  return data.trophies || [];
+}
+
+async function psnFetchEarnedTrophiesForTitle(accessToken, accountId, npCommunicationId, npServiceName) {
+  const query = npServiceName ? `?npServiceName=${npServiceName}` : "";
+  const url = `https://m.np.playstation.com/api/trophy/v1/users/${accountId}/npCommunicationIds/${npCommunicationId}/trophyGroups/all/trophies${query}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw Object.assign(new Error(`PSN earned trophies request failed (${res.status})`), { status: res.status });
+  const data = await res.json();
+  return data.trophies || [];
+}
+
+// PS5-native titles take no npServiceName at all; PS4/PS3/Vita titles
+// need npServiceName=trophy or Sony 404s — a documented psn-api quirk
+// with no reliable field on the gamelist response to tell which up
+// front, so this tries the PS5 shape first and falls back to the
+// legacy one on a 404 rather than guessing which generation a title is.
+async function psnFetchMergedTrophiesForTitle(accessToken, accountId, npCommunicationId) {
+  async function attempt(npServiceName) {
+    const [definitions, earned] = await Promise.all([
+      psnFetchTitleTrophyDefinitions(accessToken, npCommunicationId, npServiceName),
+      psnFetchEarnedTrophiesForTitle(accessToken, accountId, npCommunicationId, npServiceName),
+    ]);
+    return { definitions, earned };
+  }
+
+  let result;
+  try {
+    result = await attempt(undefined);
+  } catch (err) {
+    if (err.status !== 404) throw err;
+    result = await attempt("trophy");
+  }
+
+  const earnedById = new Map(result.earned.map((t) => [t.trophyId, t]));
+  return result.definitions.map((def) => {
+    const earnedRow = earnedById.get(def.trophyId);
+    return {
+      trophyId: def.trophyId,
+      name: def.trophyName,
+      description: def.trophyDetail,
+      icon: def.trophyIconUrl || null,
+      type: def.trophyType, // bronze | silver | gold | platinum
+      unlocked: !!earnedRow?.earned,
+      unlockedAt: earnedRow?.earnedDateTime || null,
+      rarity: earnedRow?.trophyEarnedRate != null ? Number(earnedRow.trophyEarnedRate) : null,
+    };
+  });
+}
+
+// Same refresh-if-needed pattern as getLiveTrophies/getLivePsnLibrary
+// above, calling psnFetchMergedTrophiesForTitle at the end.
+async function getLiveTrophiesForTitle(adminClient, userId, npCommunicationId) {
+  const { data: stored, error: fetchError } = await adminClient.from("psn_tokens").select("*").eq("user_id", userId).maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!stored) return "not_linked";
+  if (!stored.account_id) return "not_linked";
+
+  let accessToken = stored.access_token;
+  if (new Date(stored.access_expires_at).getTime() < Date.now()) {
+    if (new Date(stored.refresh_expires_at).getTime() < Date.now()) return "expired";
+    const refreshed = await psnRefreshTokens(stored.refresh_token);
+    accessToken = refreshed.access_token;
+    const now = Date.now();
+    await adminClient.from("psn_tokens").update({
+      access_token: refreshed.access_token,
+      refresh_token: refreshed.refresh_token || stored.refresh_token,
+      access_expires_at: new Date(now + refreshed.expires_in * 1000).toISOString(),
+      refresh_expires_at: new Date(now + refreshed.refresh_token_expires_in * 1000).toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("user_id", userId);
+  }
+
+  const trophies = await psnFetchMergedTrophiesForTitle(accessToken, stored.account_id, npCommunicationId);
+  return { trophies };
 }
 
 // Undocumented persisted GraphQL query the PS App uses — confirmed
@@ -1218,6 +1407,17 @@ async function handlePsn(req, searchParams, res) {
       if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
       const { userId, adminClient } = await verifyCallerAndGetAdminClient(req);
       const result = await getLivePsnWishlist(adminClient, userId);
+      if (result === "not_linked") return res.status(404).json({ error: "PlayStation not linked" });
+      if (result === "expired") return res.status(401).json({ error: "PlayStation link expired — please re-link with a fresh npsso" });
+      return res.status(200).json(result);
+    }
+
+    if (mode === "title-trophies") {
+      if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+      const { userId, adminClient } = await verifyCallerAndGetAdminClient(req);
+      const { npCommunicationId } = req.body || {};
+      if (!npCommunicationId) return res.status(400).json({ error: "Missing npCommunicationId" });
+      const result = await getLiveTrophiesForTitle(adminClient, userId, npCommunicationId);
       if (result === "not_linked") return res.status(404).json({ error: "PlayStation not linked" });
       if (result === "expired") return res.status(401).json({ error: "PlayStation link expired — please re-link with a fresh npsso" });
       return res.status(200).json(result);
