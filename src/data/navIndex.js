@@ -13,7 +13,7 @@ export const NAV_INDEX = [
   { label: "Current Sales", view: "sales", keywords: "gaming store sales events discounts" },
   { label: "Hype Charts", view: "hype-charts", keywords: "gaming top played trending steam charts" },
   { label: "Backlog", view: "backlog", keywords: "gaming games" },
-  { label: "Achievements", view: "achievements", keywords: "gaming trophies xbox playstation steam" },
+  { label: "Achievement Tracker", view: "achievements", keywords: "gaming trophies xbox playstation steam achievements" },
   { label: "Release Calendar", view: "release-calendar", keywords: "gaming calendar upcoming dates" },
   { label: "Upcoming Releases", view: "upcoming-releases", keywords: "gaming browse dlc list market" },
   { label: "TCG Home", view: "tcg-home", keywords: "mtg magic cards" },

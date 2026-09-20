@@ -195,7 +195,7 @@ export default function AchievementsPage({ onBack, userId, linkedSteamId }) {
     <div className="price-page">
       <div className="price-page__head">
         <button type="button" className="back-link" onClick={onBack}>← Back to Gaming</button>
-        <h1 className="price-page__title">Achievements</h1>
+        <h1 className="price-page__title">Achievement Tracker</h1>
         <p className="price-page__subtitle">
           Steam syncs automatically. Pick a game from your Xbox/PlayStation library to sync it too, or track anything manually.
         </p>

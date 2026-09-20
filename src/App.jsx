@@ -458,7 +458,7 @@ export default function App() {
               <AchievementsPage onBack={() => goTo("dashboard")} userId={userId} linkedSteamId={linkedSteamId} />
             ) : (
               <AccountGatePage
-                title="Achievements"
+                title="Achievement Tracker"
                 onSignIn={() => goTo("login", "login")}
                 onCreateAccount={() => goTo("login", "signup")}
               />

@@ -17,7 +17,7 @@ export const GAMING_SIDEBAR_ITEMS = [
   { id: "backlog", label: "Backlog" },
   { id: "release-calendar", label: "Release Calendar" },
   { id: "prices", label: "Market" },
-  { id: "achievements", label: "Achievements" },
+  { id: "achievements", label: "Achievement Tracker" },
   { id: "library", label: "Gaming Collection" },
 ];
 
