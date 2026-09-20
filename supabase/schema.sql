@@ -2768,4 +2768,67 @@ create policy "Users can remove their own media library items"
 create index media_library_items_user_id_idx on public.media_library_items (user_id);
 -- Exact-case match, same reasoning as game_library_items: titles come
 -- consistently from each import source's own casing.
+
+-- ---------- Achievement/trophy categories (additive) ----------
+-- Lets trophies/achievements be grouped into named sections (Story,
+-- Combat, Collectibles, etc.) so AchievementsPage can collapse a section
+-- once everything in it is checked off — same "close off what you've
+-- finished" layout as IGN's trophy-guide wikis.
+--
+-- Xbox/PlayStation's manual tracker (platform_achievements) gets the
+-- column directly since the app owns every row there. Steam has no
+-- category data of its own (see platform_achievements' comment above)
+-- and its achievement rows are a live view, never stored — so tagging a
+-- Steam achievement needs its own small table keyed by (appid, apiname),
+-- independent of unlock state (which always stays a live read from
+-- Steam).
+alter table public.platform_achievements add column if not exists category text;
+
+-- ---------- Real Xbox/PlayStation achievement sync (additive) ----------
+-- The comment on platform_achievements above ("neither platform has a
+-- public API") turned out to be wrong for real per-title data: Xbox
+-- Live's achievements.xboxlive.com and PSN's per-npCommunicationId
+-- trophy endpoints both work today with the exact same tokens already
+-- stored in xbox_tokens/psn_tokens for gamerscore/trophy-count and
+-- library — unofficial and undocumented (Sony/Microsoft could change
+-- them without notice), but real, confirmed against the same reference
+-- implementations (OpenXbox/xbox-webapi-python, achievements-app/
+-- psn-api) already cited throughout api/pricing.js. See
+-- AchievementsPage.jsx's ManualAchievements for the "pick a game from
+-- your real library, then Refresh" flow this powers.
+--
+-- A synced row lives in this same table, not a separate one — a
+-- "Refresh" upserts on the existing (user_id, platform, game_name,
+-- achievement_name) unique constraint, updating only unlocked/
+-- unlocked_at/description/icon_url, so a person's own category tag on
+-- a synced achievement survives every future refresh untouched.
+-- external_id is the achievement/trophy's own id (Xbox achievement id
+-- / PSN trophyId); external_title_id is the game's id (Xbox titleId /
+-- PSN npCommunicationId) — carried on every row for that game so the
+-- per-game Refresh button knows what to re-fetch without a second
+-- table just to remember "which games are tracked."
+alter table public.platform_achievements add column if not exists external_id text;
+alter table public.platform_achievements add column if not exists external_title_id text;
+alter table public.platform_achievements add column if not exists icon_url text;
+alter table public.platform_achievements add column if not exists source text not null default 'manual' check (source in ('manual', 'synced'));
+
+create table public.steam_achievement_categories (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  appid bigint not null,
+  apiname text not null,
+  category text not null,
+  updated_at timestamptz default now(),
+  unique (user_id, appid, apiname)
+);
+
+alter table public.steam_achievement_categories enable row level security;
+
+create policy "Users can manage their own Steam achievement categories"
+  on public.steam_achievement_categories for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create index steam_achievement_categories_user_appid_idx
+  on public.steam_achievement_categories (user_id, appid);
 create unique index media_library_items_user_source_title_idx on public.media_library_items (user_id, source, title);

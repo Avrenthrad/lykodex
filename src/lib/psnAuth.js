@@ -59,3 +59,13 @@ export async function fetchPsnLibrary() {
 export async function fetchPsnWishlist() {
   return callPsnService("wishlist");
 }
+
+// Real per-title trophy list — { trophies: [{ trophyId, name,
+// description, icon, type, unlocked, unlockedAt, rarity }] }.
+// npCommunicationId is the same titleId fetchPsnLibrary already
+// returns for each game (see api/pricing.js's psnFetchMergedTrophies
+// ForTitle). See AchievementsPage.jsx for the "pick a game from your
+// real library, then sync/refresh" flow.
+export async function fetchPsnTitleTrophies(npCommunicationId) {
+  return callPsnService("title-trophies", { npCommunicationId });
+}
