@@ -134,6 +134,25 @@ purely so that setup is fully recoverable if/when mobile work resumes.
 
 ## In progress / recently touched (most recent first)
 
+- 2026-09-27 — **Draft PRs #2, #3, and #4 rebased onto current main.**
+  #2 is Cloud Agent `.cursor/environment.json` (npm ci, Vite on 5173,
+  preview on 4173). #3 reorders TCG home tabs to Pokémon, Magic, One
+  Piece, Flesh and Blood, Yu-Gi-Oh!, then a disabled Riftbound tab
+  ("Coming soon") — Riftcodex is still 403 from Vercel, so the tab
+  stays disabled. #4 is the bring-your-own-LLM assistant at
+  `#/assistant`, but it is no longer the localStorage prototype:
+  provider rows and API keys go in `assistant_providers`
+  (service_role only, same posture as `xbox_tokens`/`psn_tokens`),
+  the browser only gets a masked hint back, chat sends `providerId`,
+  and the proxy refuses non-https targets except explicit localhost
+  in local dev, plus private/metadata addresses, oversized messages,
+  and redirects. **Joshua must run
+  `supabase/migrations/20260927120000_add_assistant_providers.sql`
+  before that PR is merged or deployed.** `SUPABASE_SERVICE_ROLE_KEY`
+  has to be set on Vercel (it already is for Xbox/PSN). No live
+  Supabase round-trip was possible from the agent that landed this —
+  server behavior is covered by `node scripts/test-assistant.mjs`.
+
 - 2026-09-20 — **Achievement Tracker (Gaming sidebar, renamed from
   "Achievements"): collapsible trophy categories + real Xbox/PlayStation
   sync. PR #5, not yet merged.** Two pieces:

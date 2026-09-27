@@ -11,14 +11,14 @@
 //     that need an account (e.g. adding to a wishlist) without
 //     leaving the page at all.
 
-export function AccountGatePage({ title, onSignIn, onCreateAccount }) {
+export function AccountGatePage({ title, note, onSignIn, onCreateAccount }) {
   return (
     <div className="price-page">
       <div className="account-gate-page">
         <span className="account-gate-page__eyebrow">Account required</span>
         <h1 className="account-gate-page__title">{title}</h1>
         <p className="account-gate-page__note">
-          You'll need a Lykodex account to use this — it only takes a moment.
+          {note || "You'll need a Lykodex account to use this — it only takes a moment."}
         </p>
         <div className="account-gate-page__actions">
           <button type="button" className="auth-form__submit" onClick={onCreateAccount}>

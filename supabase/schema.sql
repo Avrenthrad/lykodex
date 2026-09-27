@@ -2846,3 +2846,29 @@ create policy "Users can manage their own Steam achievement categories"
 create index steam_achievement_categories_user_appid_idx
   on public.steam_achievement_categories (user_id, appid);
 create unique index media_library_items_user_source_title_idx on public.media_library_items (user_id, source, title);
+
+-- ---------- Bring-your-own-LLM assistant providers ----------
+-- NOT YET APPLIED to production. Run
+-- supabase/migrations/20260927120000_add_assistant_providers.sql
+-- before deploying the assistant. Mirrored here so a fresh schema
+-- load matches. API keys are secrets: RLS on, no policies, and
+-- anon/authenticated revoked — service_role only, same posture as
+-- xbox_tokens/psn_tokens. api/pricing.js (?service=assistant) is the
+-- only reader/writer and never returns api_key to the browser.
+create table if not exists public.assistant_providers (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  label text not null,
+  base_url text not null,
+  api_key text not null default '',
+  model text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists assistant_providers_user_id_idx
+  on public.assistant_providers (user_id);
+
+alter table public.assistant_providers enable row level security;
+
+revoke all on table public.assistant_providers from PUBLIC, anon, authenticated;

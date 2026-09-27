@@ -77,6 +77,7 @@ const CollectiblesHomePage = lazy(() => import("./components/CollectiblesHomePag
 const TabletopHomePage = lazy(() => import("./components/TabletopHomePage"));
 const CurrentSalesPage = lazy(() => import("./components/CurrentSalesPage"));
 const CommandPalette = lazy(() => import("./components/CommandPalette"));
+const AssistantPage = lazy(() => import("./components/AssistantPage"));
 
 // Dev-only auth/onboarding preview gallery (#/preview). import.meta.env.DEV
 // is a build-time literal, so this whole binding and its dynamic import
@@ -404,6 +405,18 @@ export default function App() {
             ) : (
               <AccountGatePage
                 title="Dashfeed Settings"
+                onSignIn={() => goTo("login", "login")}
+                onCreateAccount={() => goTo("login", "signup")}
+              />
+            ))}
+
+          {view === "assistant" &&
+            (isLoggedIn ? (
+              <AssistantPage onBack={() => goTo("overview")} />
+            ) : (
+              <AccountGatePage
+                title="Assistant"
+                note="Sign in to use the assistant. Your provider and API key are stored on your account and are never sent back to the browser — after you save, this page only shows a masked hint."
                 onSignIn={() => goTo("login", "login")}
                 onCreateAccount={() => goTo("login", "signup")}
               />
