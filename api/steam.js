@@ -22,6 +22,7 @@
 //                           fetch("/api/steam?openid.*=...&mode=verifyOpenId")                -> verify a real "Sign in through Steam" callback, see lib/steamAuth.js
 
 import { allowCors } from "./_cors.js";
+import { parseSteamAppDetails } from "../src/lib/steamAppDetails.js";
 
 export default async function handler(req, res) {
   allowCors(res);
@@ -127,38 +128,7 @@ export default async function handler(req, res) {
         return res.status(steamRes.status).json({ error: "Steam appdetails request failed" });
       }
       const data = await steamRes.json();
-      const entry = data[appid];
-      if (!entry?.success) {
-        return res.status(200).json({ name: null });
-      }
-      return res.status(200).json({
-        name: entry.data.name,
-        thumb: entry.data.header_image,
-        releaseDate: entry.data.release_date?.date || null,
-        comingSoon: entry.data.release_date?.coming_soon || false,
-        // Real Steam classification — "game", "dlc", "demo", "music",
-        // etc. Used to honestly split DLC out from base games rather
-        // than guessing from the title.
-        appType: entry.data.type || null,
-        parentTitle: entry.data.fullgame?.name || null,
-        parentAppid: entry.data.fullgame?.appid ? String(entry.data.fullgame.appid) : null,
-        metacriticScore: entry.data.metacritic?.score ?? null,
-        metacriticUrl: entry.data.metacritic?.url ?? null,
-        // Real genre tags Steam assigns per game — used for the Hype
-        // Charts genre filter.
-        genres: (entry.data.genres || []).map((g) => g.description),
-        // Steam's own real AU prices for this title — not currency
-        // conversions, the actual prices Valve set for this region.
-        // Values are in cents (e.g. 4999 = $49.99).
-        steamAuPrice: entry.data.price_overview
-          ? entry.data.price_overview.final / 100
-          : entry.data.is_free
-          ? 0
-          : null,
-        steamAuRrp: entry.data.price_overview
-          ? entry.data.price_overview.initial / 100
-          : null,
-      });
+      return res.status(200).json(parseSteamAppDetails(data, appid));
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

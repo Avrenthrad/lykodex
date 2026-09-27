@@ -5,9 +5,9 @@
 
 export default function UnderConstructionOverlay() {
   return (
-    <>
+    <div className="wip-overlay">
       <span className="wip-strike" aria-hidden="true" />
       <span className="wip-badge">Under Construction</span>
-    </>
+    </div>
   );
 }

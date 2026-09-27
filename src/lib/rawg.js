@@ -49,19 +49,22 @@ export async function fetchRawgGenres() {
   return list; // [{ id, name }, ...]
 }
 
-export async function fetchUpcomingReleases({ dateFrom, dateTo, platformId, genreId, excludeAdditions }) {
+export async function fetchUpcomingReleases({ dateFrom, dateTo, platformId, genreId, excludeAdditions, page = 1 }) {
   const params = new URLSearchParams({ mode: "upcoming", dateFrom, dateTo });
   if (platformId) params.set("platforms", platformId);
   if (genreId) params.set("genres", genreId);
   if (excludeAdditions) params.set("excludeAdditions", "true");
+  if (page > 1) params.set("page", String(page));
 
   // Every filter is already folded into params.toString(), so two
   // people (or the same person re-opening the page) browsing the same
-  // date/platform/genre combo share one cached result instead of each
-  // spending their own request on it.
+  // date/platform/genre/page combo share one cached result instead of
+  // each spending their own request on it.
   const cacheKey = `gd-rawg-upcoming:${params.toString()}`;
   const cached = getCached(cacheKey, CACHE_TTL.ONE_DAY);
-  if (cached !== undefined) return cached;
+  // Older entries were a bare array and had no next/previous, so they
+  // can't drive pagination. Ignore them and refetch.
+  if (cached !== undefined && !Array.isArray(cached)) return cached;
 
   const res = await fetch(`${API_BASE}/api/rawg?${params.toString()}`);
   const data = await res.json();
@@ -82,8 +85,14 @@ export async function fetchUpcomingReleases({ dateFrom, dateTo, platformId, genr
     metacritic: g.metacritic,
     platforms: (g.platforms || []).map((p) => p.platform?.name).filter(Boolean),
   }));
-  setCached(cacheKey, list);
-  return list;
+  const payload = {
+    results: list,
+    page,
+    hasNext: Boolean(data.next),
+    hasPrevious: Boolean(data.previous) || page > 1,
+  };
+  setCached(cacheKey, payload);
+  return payload;
 }
 
 export async function searchRawgGame(title) {
