@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  loadAssistantConfig,
-  saveAssistantConfig,
-  makeProviderId,
-  getActiveProvider,
-} from "../lib/assistantConfig";
-import { sendAssistantChat } from "../lib/assistant";
+  deleteAssistantProvider,
+  listAssistantProviders,
+  loadActiveProviderId,
+  saveActiveProviderId,
+  saveAssistantProvider,
+  sendAssistantChat,
+} from "../lib/assistant";
 
 const EMPTY_FORM = { label: "", baseUrl: "", apiKey: "", model: "" };
 
 export default function AssistantPage({ onBack }) {
-  const [config, setConfig] = useState(() => loadAssistantConfig());
-  const activeProvider = getActiveProvider(config);
-
-  const [showForm, setShowForm] = useState(config.providers.length === 0);
+  const [providers, setProviders] = useState([]);
+  const [activeId, setActiveId] = useState("");
+  const [loadingList, setLoadingList] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -22,40 +24,86 @@ export default function AssistantPage({ onBack }) {
   const [error, setError] = useState("");
 
   const scrollRef = useRef(null);
+  const activeProvider = providers.find((provider) => provider.id === activeId) || null;
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
 
-  function persist(next) {
-    setConfig(next);
-    saveAssistantConfig(next);
-  }
-
-  function handleSaveProvider(e) {
-    e.preventDefault();
-    const baseUrl = form.baseUrl.trim();
-    const model = form.model.trim();
-    if (!baseUrl || !model) return;
-    const provider = {
-      id: makeProviderId(),
-      label: form.label.trim() || "My provider",
-      baseUrl,
-      apiKey: form.apiKey.trim(),
-      model,
+  useEffect(() => {
+    let cancelled = false;
+    listAssistantProviders()
+      .then((data) => {
+        if (cancelled) return;
+        const next = Array.isArray(data?.providers) ? data.providers : [];
+        setProviders(next);
+        const stored = loadActiveProviderId();
+        const selected = next.find((provider) => provider.id === stored)?.id || next[0]?.id || "";
+        setActiveId(selected);
+        if (selected) saveActiveProviderId(selected);
+        setShowForm(next.length === 0);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err?.message || "Couldn't load providers.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingList(false);
+      });
+    return () => {
+      cancelled = true;
     };
-    persist({ providers: [...config.providers, provider], activeId: provider.id });
-    setForm(EMPTY_FORM);
-    setShowForm(false);
+  }, []);
+
+  function selectProvider(id) {
+    setActiveId(id);
+    saveActiveProviderId(id);
+    setMessages([]);
     setError("");
   }
 
-  function handleRemoveActive() {
+  async function handleSaveProvider(e) {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const data = await saveAssistantProvider({
+        label: form.label.trim(),
+        baseUrl: form.baseUrl.trim(),
+        apiKey: form.apiKey.trim(),
+        model: form.model.trim(),
+      });
+      const saved = data?.provider;
+      if (!saved?.id) throw new Error("Couldn't save that provider.");
+      setProviders((current) => [...current, saved]);
+      setActiveId(saved.id);
+      saveActiveProviderId(saved.id);
+      setForm(EMPTY_FORM);
+      setShowForm(false);
+      setMessages([]);
+    } catch (err) {
+      setError(err?.message || "Couldn't save that provider.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemoveActive() {
     if (!activeProvider) return;
-    const providers = config.providers.filter((p) => p.id !== activeProvider.id);
-    persist({ providers, activeId: providers[0]?.id ?? null });
-    setMessages([]);
-    if (providers.length === 0) setShowForm(true);
+    setError("");
+    try {
+      await deleteAssistantProvider(activeProvider.id);
+      const remaining = providers.filter((provider) => provider.id !== activeProvider.id);
+      const nextId = remaining[0]?.id || "";
+      setProviders(remaining);
+      setActiveId(nextId);
+      saveActiveProviderId(nextId);
+      setMessages([]);
+      if (remaining.length === 0) setShowForm(true);
+    } catch (err) {
+      setError(err?.message || "Couldn't remove that provider.");
+    }
   }
 
   async function handleSend(e) {
@@ -69,11 +117,10 @@ export default function AssistantPage({ onBack }) {
     setError("");
     setLoading(true);
     try {
-      const data = await sendAssistantChat({ provider: activeProvider, messages: nextMessages });
+      const data = await sendAssistantChat({ providerId: activeProvider.id, messages: nextMessages });
       setMessages([...nextMessages, { role: "assistant", content: data.message || "(empty response)" }]);
     } catch (err) {
       setError(err?.message || "Something went wrong.");
-      setMessages(nextMessages);
     } finally {
       setLoading(false);
     }
@@ -92,7 +139,7 @@ export default function AssistantPage({ onBack }) {
         <div>
           <h1 className="price-page__title">Assistant</h1>
           <p className="price-page__subtitle">
-            Bring your own LLM — connect any OpenAI-compatible provider and chat with it.
+            Bring your own LLM. Connect an OpenAI-compatible provider — the API key stays on your account.
           </p>
         </div>
         {onBack && (
@@ -102,33 +149,39 @@ export default function AssistantPage({ onBack }) {
         )}
       </div>
 
-      <div className="assistant-providers">
-        {config.providers.length > 0 && (
-          <label>
-            Provider
-            <select
-              value={activeProvider?.id || ""}
-              onChange={(e) => persist({ ...config, activeId: e.target.value })}
-            >
-              {config.providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label} · {p.model}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <button type="button" className="quickdash-reset-btn" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Cancel" : "Add provider"}
-        </button>
-        {activeProvider && (
-          <button type="button" className="quickdash-reset-btn" onClick={handleRemoveActive}>
-            Remove “{activeProvider.label}”
+      {loadingList ? (
+        <p className="panel__status">Loading providers…</p>
+      ) : (
+        <div className="assistant-providers">
+          {providers.length > 0 && (
+            <label>
+              Provider
+              <select value={activeProvider?.id || ""} onChange={(e) => selectProvider(e.target.value)}>
+                {providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.label} · {provider.model}
+                    {provider.keyHint ? ` · ${provider.keyHint}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <button type="button" className="quickdash-reset-btn" onClick={() => setShowForm((open) => !open)}>
+            {showForm ? "Cancel" : "Add provider"}
           </button>
-        )}
-      </div>
+          {activeProvider && (
+            <button type="button" className="quickdash-reset-btn" onClick={handleRemoveActive}>
+              Remove “{activeProvider.label}”
+            </button>
+          )}
+        </div>
+      )}
 
-      {showForm && (
+      {activeProvider?.keyHint && (
+        <p className="assistant-key-hint">Key stored on your account ({activeProvider.keyHint}). It isn’t kept in this browser.</p>
+      )}
+
+      {showForm && !loadingList && (
         <form className="assistant-form" onSubmit={handleSaveProvider}>
           <label>
             Name
@@ -136,6 +189,7 @@ export default function AssistantPage({ onBack }) {
               value={form.label}
               onChange={(e) => setForm({ ...form, label: e.target.value })}
               placeholder="e.g. OpenAI, my Ollama"
+              maxLength={60}
             />
           </label>
           <label>
@@ -144,6 +198,9 @@ export default function AssistantPage({ onBack }) {
               value={form.baseUrl}
               onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
               placeholder="https://api.openai.com/v1"
+              spellCheck={false}
+              autoCapitalize="off"
+              required
             />
           </label>
           <label>
@@ -152,7 +209,9 @@ export default function AssistantPage({ onBack }) {
               type="password"
               value={form.apiKey}
               onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-              placeholder="sk-… (leave blank for keyless/local)"
+              placeholder="Sent once, then only a masked hint is shown"
+              autoComplete="off"
+              spellCheck={false}
             />
           </label>
           <label>
@@ -161,23 +220,29 @@ export default function AssistantPage({ onBack }) {
               value={form.model}
               onChange={(e) => setForm({ ...form, model: e.target.value })}
               placeholder="gpt-4o-mini"
+              spellCheck={false}
+              autoCapitalize="off"
+              required
             />
           </label>
           <p className="assistant-form__note">
-            Any OpenAI-compatible endpoint works — OpenAI, OpenRouter, Groq, a local Ollama/vLLM, etc.
-            Add several and switch between them above.
+            OpenAI, OpenRouter, Groq, and other OpenAI-compatible APIs need https. A local server on localhost is
+            allowed only while you’re running the app in local dev. The key is stored for your account and is not
+            returned after you save.
           </p>
           <div className="assistant-form__actions">
-            <button type="submit" className="auth-form__submit">
-              Save provider
+            <button type="submit" className="auth-form__submit" disabled={saving}>
+              {saving ? "Saving…" : "Save provider"}
             </button>
           </div>
         </form>
       )}
 
-      {!activeProvider ? (
+      {error && <p className="panel__status panel__status--error">{error}</p>}
+
+      {!loadingList && !activeProvider ? (
         <p className="panel__status">Add a provider above to start chatting.</p>
-      ) : (
+      ) : activeProvider ? (
         <>
           <div className="assistant-chat" ref={scrollRef}>
             {messages.length === 0 && !loading && (
@@ -185,10 +250,10 @@ export default function AssistantPage({ onBack }) {
                 Connected to {activeProvider.label} ({activeProvider.model}). Say hello below.
               </p>
             )}
-            {messages.map((m, i) => (
-              <div key={i} className={`assistant-msg assistant-msg--${m.role}`}>
-                <span className="assistant-msg__role">{m.role}</span>
-                <div className="assistant-msg__body">{m.content}</div>
+            {messages.map((message, index) => (
+              <div key={index} className={`assistant-msg assistant-msg--${message.role}`}>
+                <span className="assistant-msg__role">{message.role}</span>
+                <div className="assistant-msg__body">{message.content}</div>
               </div>
             ))}
             {loading && (
@@ -198,8 +263,6 @@ export default function AssistantPage({ onBack }) {
               </div>
             )}
           </div>
-
-          {error && <p className="panel__status panel__status--error">{error}</p>}
 
           <form className="assistant-composer" onSubmit={handleSend}>
             <textarea
@@ -215,7 +278,7 @@ export default function AssistantPage({ onBack }) {
             </button>
           </form>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -11692,3 +11692,9 @@ html[data-mode="light"] .overview-tile {
   margin-top: 0;
   min-width: 96px;
 }
+
+.assistant-key-hint {
+  margin: -6px 0 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}

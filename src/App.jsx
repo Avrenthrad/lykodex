@@ -410,7 +410,17 @@ export default function App() {
               />
             ))}
 
-          {view === "assistant" && <AssistantPage onBack={() => goTo("overview")} />}
+          {view === "assistant" &&
+            (isLoggedIn ? (
+              <AssistantPage onBack={() => goTo("overview")} />
+            ) : (
+              <AccountGatePage
+                title="Assistant"
+                note="Sign in to use the assistant. Your provider and API key are stored on your account and are never sent back to the browser — after you save, this page only shows a masked hint."
+                onSignIn={() => goTo("login", "login")}
+                onCreateAccount={() => goTo("login", "signup")}
+              />
+            ))}
 
           {view === "prices" && (
             <PriceComparisonPage

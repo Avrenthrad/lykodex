@@ -42,12 +42,14 @@
 //   POST /api/pricing?service=psn&mode=title-trophies, Authorization: Bearer <token>, body {npCommunicationId, npServiceName}
 //   POST /api/pricing?service=lykodex-session, Authorization: Bearer <caller's access token>
 //   GET  /api/pricing?service=mastery-cron, Authorization: Bearer <CRON_SECRET> (Vercel Cron only, see vercel.json)
-//   POST /api/pricing?service=assistant, body {baseUrl, apiKey, model, messages} (bring-your-own-LLM chat proxy)
+//   POST /api/pricing?service=assistant&mode=list|save|delete|chat, Authorization: Bearer <token>
+//        Provider URL + API key live in assistant_providers (service_role only).
+//        Chat body is {providerId, messages} — never the key or base URL.
 
 import { allowCors } from "./_cors.js";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
-import { assistantChat } from "../src/lib/assistantProxy.js";
+import { dispatchAssistant, supabaseAssistantDb } from "../src/lib/assistantApi.js";
 import { computeXboxScore, computePsScore, computeSteamScore, computeMasteryScore, accountXpFromMastery, levelFromXp } from "../src/lib/gameMastery.js";
 import { computeOverallScore } from "../src/lib/overallMastery.js";
 
@@ -2009,18 +2011,29 @@ async function handleCurrency(res) {
   }
 }
 
-// Bring-your-own-LLM assistant. Forwards a chat request to any
-// OpenAI-compatible endpoint using the provider config the caller sends
-// in the body. PROTOTYPE: the key arrives per-request from the browser
-// (stored client-side) rather than from a service_role table like
-// xbox_tokens/psn_tokens — see src/lib/assistantConfig.js for why, and
-// what to harden before this ships for real.
-async function handleAssistant(req, res) {
+// Bring-your-own-LLM assistant. Same service_role posture as
+// xbox_tokens/psn_tokens: the caller is authenticated, then the key is
+// read from assistant_providers and never written back to the response.
+// allowLocalhost is off on Vercel (including preview) so a deployed
+// function cannot be aimed at link-local or loopback addresses. The
+// Vite dev middleware is the one place http://localhost is accepted.
+async function handleAssistant(req, searchParams, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
-  const { baseUrl, apiKey, model, messages } = req.body || {};
-  const result = await assistantChat({ baseUrl, apiKey, model, messages });
-  if (!result.ok) return res.status(result.status || 502).json({ error: result.error });
-  return res.status(200).json({ message: result.message, model: result.model, usage: result.usage });
+  let userId;
+  let adminClient;
+  try {
+    ({ userId, adminClient } = await verifyCallerAndGetAdminClient(req));
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+  const result = await dispatchAssistant({
+    db: supabaseAssistantDb(adminClient),
+    userId,
+    mode: searchParams.get("mode"),
+    body: req.body || {},
+    allowLocalhost: !process.env.VERCEL,
+  });
+  return res.status(result.status).json(result.body);
 }
 
 export default async function handler(req, res) {
@@ -2051,7 +2064,7 @@ export default async function handler(req, res) {
   if (service === "crunchyroll") return handleCrunchyroll(req, searchParams, res);
   if (service === "mastery-cron") return handleMasteryCron(req, res);
   if (service === "lykodex-session") return handleLykodexSession(req, res);
-  if (service === "assistant") return handleAssistant(req, res);
+  if (service === "assistant") return handleAssistant(req, searchParams, res);
 
   return res.status(400).json({ error: "Missing or invalid service parameter" });
 }
