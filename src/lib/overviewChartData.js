@@ -90,6 +90,17 @@ function gamesToDayMap(games, sinceUnix) {
   return map;
 }
 
+// History rows are daily snapshots, so a score recomputed since the
+// last snapshot wouldn't show up. Append the live score as a "now"
+// point — the same thing the friends/guild history RPCs already do for
+// peers (see schema.sql). Skipped for a 0 score, matching those RPCs.
+export function withLiveMasteryPoint(points, liveScore, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const value = Number(liveScore);
+  if (!Number.isFinite(value) || value <= 0) return points;
+  const earlier = points.filter((p) => p.time < nowSeconds);
+  return [...earlier, { time: nowSeconds, value: Math.round(value * 10) / 10 }];
+}
+
 export async function fetchSelfMasteryHistory(userId, sinceDays) {
   const since = new Date(Date.now() - sinceDays * 86400000).toISOString();
   const { data, error } = await supabase
