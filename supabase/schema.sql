@@ -2846,3 +2846,22 @@ create policy "Users can manage their own Steam achievement categories"
 create index steam_achievement_categories_user_appid_idx
   on public.steam_achievement_categories (user_id, appid);
 create unique index media_library_items_user_source_title_idx on public.media_library_items (user_id, source, title);
+
+-- ---------- Discord bot: per-server settings (additive) ----------
+-- Used by the new Lykodex Discord bot (Avrenthrad/Lykodex-Discord-App-Coopetorium,
+-- replacing discord-bot/). Mirrors that repo's sql/001_discord_guild_settings.sql.
+create table if not exists public.discord_guild_settings (
+  discord_guild_id text primary key,
+  feed_channel_id text,
+  feed_enabled boolean not null default true,
+  post_now_playing boolean not null default false,
+  feed_cursor timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.discord_guild_settings enable row level security;
+
+-- The feed polls guild_activity by (user_id, created_at) — the only
+-- existing index is (guild_id, created_at), so add one that fits.
+create index if not exists guild_activity_user_created_idx
+  on public.guild_activity (user_id, created_at);

@@ -1,5 +1,12 @@
 # Lykodex Presence Bot
 
+> **Being replaced.** The new Lykodex Discord bot lives in
+> [Avrenthrad/Lykodex-Discord-App-Coopetorium](https://github.com/Avrenthrad/Lykodex-Discord-App-Coopetorium).
+> It includes everything this bot does, plus slash commands, an activity feed and leaderboards.
+> It's being tested on the Coopetorium server first. Keep this bot running until cutover,
+> then follow "Cutover" in that repo's README. Never run both with presence tracking on,
+> or console playtime gets counted twice.
+
 Tracks cross-platform "currently playing" status and Xbox/PlayStation
 playtime for linked Lykodex accounts, using Discord's own official
 Xbox/PlayStation/Steam presence integrations as the data source. It
