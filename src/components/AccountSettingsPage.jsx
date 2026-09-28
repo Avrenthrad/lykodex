@@ -100,6 +100,8 @@ export default function AccountSettingsPage({
   onShareActivityWithGuildsChange,
   readReceiptsEnabled,
   onReadReceiptsEnabledChange,
+  discordTrackingEnabled,
+  onDiscordTrackingEnabledChange,
   userId,
   onGoToFriends,
 }) {
@@ -446,6 +448,25 @@ export default function AccountSettingsPage({
               type="checkbox"
               checked={readReceiptsEnabled}
               onChange={(e) => onReadReceiptsEnabledChange(e.target.checked)}
+            />
+            <span className="toggle-switch__track" />
+            <span className="toggle-switch__thumb" />
+          </span>
+        </label>
+
+        <p className="settings-card__note">
+          Off by default. When on, the Lykodex Discord bot records your game playtime (Xbox,
+          PlayStation and non-Steam PC), voice chat time, and Spotify / Watching time from your
+          Discord status, and counts it toward your Mastery. Needs Discord linked and a server
+          shared with the bot. Nothing before you turn this on can be backfilled.
+        </p>
+        <label className="toggle-row">
+          <span className="toggle-row__label">Discord activity tracking</span>
+          <span className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={discordTrackingEnabled}
+              onChange={(e) => onDiscordTrackingEnabledChange(e.target.checked)}
             />
             <span className="toggle-switch__track" />
             <span className="toggle-switch__thumb" />

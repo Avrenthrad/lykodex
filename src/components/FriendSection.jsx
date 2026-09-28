@@ -67,7 +67,7 @@ export default function FriendSection({ isLoggedIn, onSignIn, onCreateAccount, l
   // /discord-bot and lib/crossPlatformActivity.js). Independent of
   // linkedSteamId/userId's OTHER effects below since it needs both
   // pieces of data together before it can compute a combined total.
-  const [totalPlaytime, setTotalPlaytime] = useState(null); // { steamHours, xboxHours, playstationHours, totalHours }
+  const [totalPlaytime, setTotalPlaytime] = useState(null); // { steamHours, xboxHours, playstationHours, pcHours, totalHours }
   const [liveActivity, setLiveActivity] = useState(null); // { platform, game_name } from the bot, or null
   const [playtimeStatus, setPlaytimeStatus] = useState("idle");
 
@@ -88,12 +88,17 @@ export default function FriendSection({ isLoggedIn, onSignIn, onCreateAccount, l
         const playstationMinutes = platformRows
           .filter((r) => r.platform === "playstation")
           .reduce((sum, r) => sum + r.total_minutes, 0);
+        // Non-Steam PC games, tracked by the Discord bot (opt-in).
+        const pcMinutes = platformRows
+          .filter((r) => r.platform === "pc")
+          .reduce((sum, r) => sum + r.total_minutes, 0);
 
         setTotalPlaytime({
           steamHours: Math.round(steamMinutes / 60),
           xboxHours: Math.round(xboxMinutes / 60),
           playstationHours: Math.round(playstationMinutes / 60),
-          totalHours: Math.round((steamMinutes + xboxMinutes + playstationMinutes) / 60),
+          pcHours: Math.round(pcMinutes / 60),
+          totalHours: Math.round((steamMinutes + xboxMinutes + playstationMinutes + pcMinutes) / 60),
         });
         setLiveActivity(activity?.game_name ? activity : null);
         setPlaytimeStatus("ready");
@@ -244,6 +249,7 @@ export default function FriendSection({ isLoggedIn, onSignIn, onCreateAccount, l
                 <span>{totalPlaytime.steamHours}h Steam</span>
                 {totalPlaytime.xboxHours > 0 && <span>{totalPlaytime.xboxHours}h Xbox</span>}
                 {totalPlaytime.playstationHours > 0 && <span>{totalPlaytime.playstationHours}h PlayStation</span>}
+                {totalPlaytime.pcHours > 0 && <span>{totalPlaytime.pcHours}h PC (non-Steam)</span>}
               </div>
               {totalPlaytime.xboxHours === 0 && totalPlaytime.playstationHours === 0 && (
                 <p className="total-playtime__note">

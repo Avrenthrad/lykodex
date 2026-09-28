@@ -278,6 +278,9 @@ export function AppProvider({ children }) {
   // too, the same "both sides opted in, or neither sees anything"
   // model most messaging apps use — see InboxPage.jsx.
   const [readReceiptsEnabled, setReadReceiptsEnabled] = useState(true);
+  // Opt-in for the Lykodex Discord bot recording playtime, voice chat,
+  // Spotify and Watching time (profiles.discord_tracking_enabled).
+  const [discordTrackingEnabled, setDiscordTrackingEnabled] = useState(false);
   const [xbxpricesKey, setXbxpricesKey] = useState("");
   const [platpricesKey, setPlatpricesKey] = useState("");
 
@@ -365,6 +368,7 @@ export function AppProvider({ children }) {
   const hydratedRef = useRef(false);
   const writeTimerRef = useRef(null);
   const wallpaperWriteTimerRef = useRef(null);
+  const discordTrackingWriteTimerRef = useRef(null);
   // True only when the hash-routing init effect defaulted a packaged
   // app straight to "login" with no explicit hash — lets the
   // auth-session effect below bounce a person with an already-
@@ -520,6 +524,7 @@ export function AppProvider({ children }) {
       setXbxpricesKey("");
       setPlatpricesKey("");
       setShareActivityWithGuilds(false);
+      setDiscordTrackingEnabled(false);
       // Layout deliberately kept — still useful offline
       return;
     }
@@ -563,6 +568,7 @@ export function AppProvider({ children }) {
         setCurrency(profile.currency || "AUD");
         setShareActivityWithGuilds(profile.share_activity_with_guilds || false);
         setReadReceiptsEnabled(profile.read_receipts_enabled !== false);
+        setDiscordTrackingEnabled(profile.discord_tracking_enabled === true);
         setXbxpricesKey(profile.xbxprices_key || "");
         setPlatpricesKey(profile.platprices_key || "");
         if (profile.dashfeed_games) setGameToggles(profile.dashfeed_games);
@@ -693,6 +699,23 @@ export function AppProvider({ children }) {
 
     return () => clearTimeout(wallpaperWriteTimerRef.current);
   }, [wallpaperUrl, userId]);
+
+  // ---------- effects: Discord tracking opt-in write-back (isolated) ----------
+  // Same isolation reason as wallpaper above: discord_tracking_enabled
+  // is a new column (supabase/schema.sql) that may not exist yet, and
+  // bundling it into the big update would break every other save.
+  useEffect(() => {
+    if (!supabaseConfigured || !userId || !hydratedRef.current) return;
+
+    clearTimeout(discordTrackingWriteTimerRef.current);
+    discordTrackingWriteTimerRef.current = setTimeout(() => {
+      upsertProfile(userId, { discord_tracking_enabled: discordTrackingEnabled }).catch((err) =>
+        console.error("Failed to save Discord tracking opt-in (has the discord tracking migration been run?):", err)
+      );
+    }, 500);
+
+    return () => clearTimeout(discordTrackingWriteTimerRef.current);
+  }, [discordTrackingEnabled, userId]);
 
   // ---------- effects: hash routing ----------
   useEffect(() => {
@@ -1187,6 +1210,8 @@ export function AppProvider({ children }) {
       setShareActivityWithGuilds,
       readReceiptsEnabled,
       setReadReceiptsEnabled,
+      discordTrackingEnabled,
+      setDiscordTrackingEnabled,
       xbxpricesKey,
       setXbxpricesKey,
       platpricesKey,
@@ -1276,6 +1301,7 @@ export function AppProvider({ children }) {
       currency,
       shareActivityWithGuilds,
       readReceiptsEnabled,
+      discordTrackingEnabled,
       xbxpricesKey,
       platpricesKey,
       toggleThemeMode,
