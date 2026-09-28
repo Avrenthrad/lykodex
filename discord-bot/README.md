@@ -1,129 +1,141 @@
-# Lykodex Presence Bot
+# Lykodex Discord Bot
 
-Tracks cross-platform "currently playing" status and Xbox/PlayStation
-playtime for linked Lykodex accounts, using Discord's own official
-Xbox/PlayStation/Steam presence integrations as the data source. It
-also runs a daily Gaming Mastery refresh (see below) — same always-on
-process, two independent jobs.
+The always-on Lykodex Discord bot. It started as the Presence Bot (live
+"now playing" + console playtime + daily Mastery refresh) and now also
+has slash commands, an activity feed, leaderboards, and opt-in tracking
+of voice chat, PC playtime, Spotify and Watching time for Mastery.
 
-**This is a genuinely separate project from the main Lykodex app.**
-It needs a persistent, always-on connection to Discord (the Gateway),
-which doesn't fit inside a Vercel serverless function — those spin up
-per-request and shut down, they can't hold a connection open. This
-needs its own long-running host.
+It uses the **same Supabase database as the Lykodex app** and needs its
+own always-on host (Railway): a Discord Gateway connection can't live in
+a Vercel serverless function.
 
-## One-time setup
+## What it does
 
-### 1. Create the bot
+| Feature | How |
+|---|---|
+| **Account linking** | `/link` shows your link status, or steps to link. Linking itself happens in the app (Account Linking → Discord OAuth), so Discord proves who you are. |
+| **Slash commands** | `/profile`, `/mastery`, `/collection`, `/nowplaying`, `/leaderboard` |
+| **Activity feed** | Posts Lykodex activity to a channel: achievements, 100% completions, finished games, wishlist adds, new TCG cards, Mastery level-ups, and (optionally) "started playing X". Bulk events are batched into one line per person. |
+| **Leaderboards** | `/leaderboard board:` Overall Mastery · Gaming Mastery · Tracked Playtime · Voice Chat Time · 100% Completions · Library Size |
+| **Presence tracking** *(opt-in)* | Live "currently playing" → `current_activity`; Xbox, PlayStation and non-Steam PC session time → `platform_playtime` |
+| **Voice chat time** *(opt-in)* | Voice sessions → `discord_voice_sessions` → new **Social** College in Overall Mastery |
+| **Spotify / Watching** *(opt-in)* | Listening and Watching sessions → `discord_media_sessions` → **Entertainment** Mastery |
+| **Daily Mastery refresh** | Recomputes Gaming + Overall Mastery for every profile every 24h |
 
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-2. Either use the existing Lykodex application (the one already set
-   up for "Sign in with Discord"), or create a new one
-3. Go to the **Bot** tab → **Add Bot** if there isn't one yet
-4. Copy the **bot token** — this goes in `.env` as `DISCORD_BOT_TOKEN`
-5. On the same page, under **Privileged Gateway Intents**, toggle on
-   **both Presence Intent AND Server Members Intent** — the bot uses
-   both, and Discord's gateway refuses the connection outright
-   ("Used disallowed intents") if either one is off, without saying
-   which one's missing.
+### Tracking is opt-in
 
-### 2. Create a Lykodex Discord server
+The bot records nothing about a person (not even live "now playing")
+until they turn on **Discord activity tracking** in Lykodex (Account
+Settings → Privacy, `profiles.discord_tracking_enabled`). Turning it
+off takes effect within about 5 minutes. Nothing can be backfilled.
 
-A bot can only see presence for people it shares a server with —
-there's no way around this, it's how Discord's permission model works.
-Create a dedicated server (or use an existing Lykodex community
-server) and invite the bot to it. Testers need to actually join this
-server for tracking to work for them.
+| What | Where it goes | Counts toward |
+|---|---|---|
+| Xbox / PlayStation playtime | `platform_playtime` | (recorded) |
+| PC playtime, excluding games in your Steam library | `platform_playtime` (`pc`) | (recorded) |
+| Voice chat, only when not deafened, not AFK, and with someone else | `discord_voice_sessions` | **Social**: 10 raw per hour, 100h ≈ 1000 |
+| Spotify listening (skips under 30s ignored) | `discord_media_sessions` | **Entertainment**: +1 per hour |
+| Watching (e.g. Crunchyroll) | `discord_media_sessions` | **Entertainment**: +4 per hour |
 
-To invite the bot: Developer Portal → your app → **OAuth2** → **URL
-Generator** → check `bot` scope → check the permissions it needs
-(just needs to view the server and its members' presence, nothing
-else) → open the generated URL → select your server.
+Totals come from the `discord_activity_totals` view. Weights live in
+`src/mastery/overallMastery.js` (kept in sync with the app's
+`src/lib/overallMastery.js`).
 
-### 3. Get the Supabase service_role key
+### Privacy rule (applies everywhere)
 
-Supabase dashboard → **Settings → API** → the **`service_role`
-`secret`** key (not the anon/publishable one used everywhere else).
-Goes in `.env` as `SUPABASE_SERVICE_ROLE_KEY`. Treat this like a
-master password — it bypasses every Row Level Security rule in the
-database.
+The bot uses the `service_role` key, so Supabase RLS doesn't protect
+anyone. The bot enforces this one rule itself (`src/privacy.js`):
 
-### 4. Run it
+- You can always see **your own** stats.
+- You can see **someone else's** stats, leaderboard spot and feed posts
+  only if they've turned on **Share activity with guilds** in Lykodex.
+
+That's the same opt-in Guild Pulse already uses. `/nowplaying` is the
+one exception: it only shows what Discord already shows everyone in the
+member list.
+
+## Commands
+
+| Command | Who | What |
+|---|---|---|
+| `/link` | anyone | Link status / how to link |
+| `/profile [user]` | anyone | Profile card: mastery levels, now playing, gamertags |
+| `/mastery [user]` | anyone | Overall + Gaming Mastery with XP bars and breakdown |
+| `/collection [user]` | anyone | Counts across Gaming, TCG, Entertainment, Collectibles |
+| `/nowplaying` | anyone | Who in the server is playing what right now |
+| `/leaderboard [board]` | anyone | Server leaderboard (incl. Voice Chat Time) |
+| `/lykodex-setup feed channel:#x [now_playing]` | Manage Server | Turn on the activity feed in a channel |
+| `/lykodex-setup feed-off` | Manage Server | Pause the feed |
+| `/lykodex-setup status` | Manage Server | Show settings |
+
+## Setup (upgrading the existing bot)
+
+The bot token, intents and Railway service stay the same. Env var names
+are unchanged, so the existing Railway variables keep working.
+
+1. **Database:** run the two SQL files in `sql/` once, in order, in the
+   Supabase SQL editor. They're the same as the last two blocks of
+   `supabase/schema.sql`, and both are additive and safe to re-run.
+2. **Re-invite the bot** so slash commands work. The original invite
+   only had the `bot` scope. Developer Portal → your app → **OAuth2 →
+   URL Generator**: scopes `bot` + `applications.commands`; permissions
+   **View Channels**, **Send Messages**, **Embed Links**. Open the URL
+   and pick your server. It won't kick or duplicate the bot; it only
+   adds permissions.
+3. **Optional Railway variable:** `DISCORD_GUILD_ID` = your server's ID
+   (Developer Mode → right-click server → Copy Server ID). Commands
+   appear instantly in that server; without it they register globally
+   and can take up to an hour to show.
+4. **Deploy:** merging to `main` redeploys the existing Railway service
+   (Root Directory `discord-bot`, `npm start`). Nothing else to change.
+5. **In Discord:** `/lykodex-setup feed channel:#your-channel`.
+6. **Each person:** turn on **Discord activity tracking** in Lykodex
+   (Account Settings → Privacy).
+
+**Heads-up:** the old version tracked every linked account. This one
+only tracks people who opt in, so anyone who hasn't turned tracking on
+stops getting now-playing and console hours after the upgrade.
+
+Intents: **Presence** and **Server Members** (already on) are still
+required. Voice tracking uses the Voice States intent, which isn't
+privileged, so there's nothing new to toggle.
+
+### Running locally
 
 ```
+cp .env.example .env   # fill in token + Supabase URL/service key
 npm install
 npm start
 ```
 
-For real use, this needs to run continuously somewhere — a small
-always-on host like Railway, Fly.io, Render, or a basic VPS all work
-fine for a single lightweight bot like this. `npm start` locally is
-fine for testing it, but it'll stop the moment you close the terminal.
+Don't run a local copy while the Railway one is up with tracking on,
+or playtime gets counted twice. Set `ENABLE_PRESENCE_TRACKING=false` and
+`ENABLE_MASTERY_REFRESH=false` locally if you need to.
 
-### Deploying to Railway
+## Development
 
-This folder already has a `railway.json` (build + restart policy). Since
-the bot lives in a subdirectory of the main Lykodex repo, not its own
-repo, one manual setting is required:
+```
+npm test          # unit tests (formatting, batching, privacy, level-ups, voice/media tracking, command JSON)
+```
 
-1. [railway.com](https://railway.com) → **New Project** → **Deploy from
-   GitHub repo** → pick this repo.
-2. In the new service's **Settings → Source**, set **Root Directory** to
-   `discord-bot` — otherwise Railway tries to build the whole monorepo
-   (and the main app's `package.json`) instead of just the bot.
-3. **Variables** tab → add `DISCORD_BOT_TOKEN`, `SUPABASE_URL`,
-   `SUPABASE_SERVICE_ROLE_KEY` (same values as your local `.env`).
-   `SITE_BASE_URL` is optional — only needed if the production site
-   ever moves off `gamerdash.vercel.app`.
-4. Deploy. Railway runs `npm start` automatically and restarts the
-   process if it crashes (`railway.json`'s restart policy) — no
-   further config needed for an always-on worker like this.
+```
+src/
+  index.js            startup, wiring, schedules
+  config.js           env parsing
+  supabase.js         service_role client
+  links.js            Discord ↔ Lykodex lookups (discord_links)
+  privacy.js          the one visibility rule
+  format.js           pure formatting / batching / ranking helpers
+  settings.js         discord_guild_settings access
+  feed.js             activity feed poller + now-playing / level-up posts
+  tracking.js         opt-in gate + Steam-library exclusion for PC playtime
+  presence.js         now playing, playtime, Spotify/Watching sessions
+  voice.js            voice chat sessions → Social Mastery
+  mastery/            scoring math + daily refresh (ported) + level-up diff
+  commands/           one file per slash command
+sql/                  schema additions for the shared Lykodex database
+```
 
-## What it does and doesn't do
-
-- Shows real-time "currently playing X" for Xbox, PlayStation, and
-  Steam/PC, sourced from Discord's own official platform integrations
-- Accumulates actual playtime hours for Xbox/PlayStation specifically
-  (Steam already has its own official number from Steam's own API —
-  this deliberately doesn't duplicate that)
-- **Cannot backfill hours played before someone links up** — there's
-  no historical console playtime data anywhere to pull from, on any
-  platform, official or unofficial. Tracking only ever starts counting
-  forward from the moment it begins.
-- Platform attribution (is this really Xbox vs PlayStation vs PC) relies
-  on a Discord field their own docs admit can be unreliable — falls
-  back to "unknown" rather than guessing when it's not confident.
-
-## Daily Gaming + Overall Mastery refresh
-
-Runs once on startup and then every 24 hours (see `masteryRefresh.js`,
-scheduled from the bottom of `index.js`).
-
-**Gaming Mastery** — for every profile with a linked Steam account
-and/or a self-reported Xbox/PlayStation input:
-
-- **Steam**: a genuine live re-scan via the real Steam Web API (through
-  the main site's own `/api/steam` proxy), so this portion of the score
-  is honestly fresh every day.
-- **Xbox / PlayStation**: no public API exists for a person's own
-  Gamerscore or trophy case (see `mastery_inputs` in `schema.sql`), so
-  this does **not** pull anything new for them — it re-applies whatever
-  numbers the person last typed in on Account Linking, recombined with
-  the fresh Steam score. Xbox/PS values only change when the person
-  updates them manually.
-
-**Overall Mastery** — recomputed for *every* profile, combining that
-day's fresh Gaming Mastery score with whatever's already stored for
-the other 4 Colleges (TCG, Entertainment, Collectibles, Tabletop),
-mirroring `src/lib/overallMasteryData.js`. TCG's contribution is a
-live Scryfall price re-scan of the person's MTG collection specifically
-(through the main site's own `/api/scryfall` proxy) — same MTG-only
-scope the browser's own Overall Mastery currently has; it doesn't yet
-factor in Flesh and Blood or Pokémon collections. A College with
-nothing added simply isn't counted, same "missing ≠ zero" rule used
-everywhere else in this project.
-
-This lives on the bot rather than a Vercel Cron Job because scanning
-many people's Steam libraries (or MTG collections) in one run can take
-longer than the ~10s execution limit on Vercel's Hobby plan — this
-process just stays up and runs it in the background instead.
+`src/mastery/gameMastery.js` and `overallMastery.js` are hand-kept copies
+of the app's `src/lib/` scoring math. If the formulas change there, update
+them here too.

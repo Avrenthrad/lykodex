@@ -136,6 +136,8 @@ export default function App() {
     setShareActivityWithGuilds,
     readReceiptsEnabled,
     setReadReceiptsEnabled,
+    discordTrackingEnabled,
+    setDiscordTrackingEnabled,
     xbxpricesKey,
     setXbxpricesKey,
     platpricesKey,
@@ -379,6 +381,8 @@ export default function App() {
                 onShareActivityWithGuildsChange={setShareActivityWithGuilds}
                 readReceiptsEnabled={readReceiptsEnabled}
                 onReadReceiptsEnabledChange={setReadReceiptsEnabled}
+                discordTrackingEnabled={discordTrackingEnabled}
+                onDiscordTrackingEnabledChange={setDiscordTrackingEnabled}
                 userId={userId}
                 onGoToFriends={() => goTo("friends")}
               />
