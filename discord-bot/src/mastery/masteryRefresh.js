@@ -39,13 +39,14 @@ import {
   computeEntertainmentRaw,
   computeCollectiblesRaw,
   computeTabletopRaw,
+  computeSocialRaw,
   computeOverallScore,
 } from "./overallMastery.js";
 
 // The site's own /api/steam Vercel function — same proxy the browser
 // calls, reused here instead of duplicating a second STEAM_API_KEY +
 // the fetch logic in api/steam.js on the bot's side.
-const SITE_BASE_URL = process.env.SITE_BASE_URL || "https://lykodex.vercel.app";
+const SITE_BASE_URL = (process.env.SITE_BASE_URL || "https://lykodex.vercel.app").replace(/\/$/, "");
 
 // Same bound as gameMasteryData.js's GAMES_TO_SCAN — scanning a
 // person's entire library isn't worth the API load for a periodic
@@ -190,14 +191,35 @@ async function gatherTcgRaw(supabase, userId) {
   return computeTcgRaw(enriched, (decks || []).length);
 }
 
-async function gatherEntertainmentRaw(supabase, userId) {
+// Discord bot totals (voice / listening / watching seconds) — null when
+// the person has never had any Discord activity recorded.
+async function fetchDiscordTotals(supabase, userId) {
+  const { data, error } = await supabase
+    .from("discord_activity_totals")
+    .select("voice_active_seconds, listening_seconds, watching_seconds")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function gatherEntertainmentRaw(supabase, userId, discordTotals) {
   const { data, error } = await supabase
     .from("entertainment_entries")
     .select("status")
     .eq("user_id", userId);
   if (error) throw error;
-  if (!data || data.length === 0) return null;
-  return computeEntertainmentRaw(data);
+  const media = {
+    listeningSeconds: Number(discordTotals?.listening_seconds) || 0,
+    watchingSeconds: Number(discordTotals?.watching_seconds) || 0,
+  };
+  if ((!data || data.length === 0) && media.listeningSeconds + media.watchingSeconds === 0) return null;
+  return computeEntertainmentRaw(data || [], media);
+}
+
+function gatherSocialRaw(discordTotals) {
+  const seconds = Number(discordTotals?.voice_active_seconds) || 0;
+  return seconds > 0 ? computeSocialRaw(seconds) : null;
 }
 
 async function gatherCollectiblesRaw(supabase, userId) {
@@ -233,9 +255,11 @@ async function gatherTabletopRaw(supabase, userId) {
 // same "College absent = not counted" rule the browser's
 // overallMasteryData.js already follows, applied one level up here).
 async function recomputeOverallMasteryForUser(supabase, userId, gamingMasteryScore) {
+  const discordTotals = await fetchDiscordTotals(supabase, userId);
+  const socialRaw = gatherSocialRaw(discordTotals);
   const [tcgRaw, entertainmentRaw, collectiblesRaw, tabletopRaw] = await Promise.all([
     gatherTcgRaw(supabase, userId),
-    gatherEntertainmentRaw(supabase, userId),
+    gatherEntertainmentRaw(supabase, userId, discordTotals),
     gatherCollectiblesRaw(supabase, userId),
     gatherTabletopRaw(supabase, userId),
   ]);
@@ -246,6 +270,7 @@ async function recomputeOverallMasteryForUser(supabase, userId, gamingMasterySco
   if (entertainmentRaw !== null) collegeScores.entertainment = entertainmentRaw;
   if (collectiblesRaw !== null) collegeScores.collectibles = collectiblesRaw;
   if (tabletopRaw !== null) collegeScores.tabletop = tabletopRaw;
+  if (socialRaw !== null) collegeScores.social = socialRaw;
 
   const combined = computeOverallScore(collegeScores);
 
