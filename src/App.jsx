@@ -329,7 +329,7 @@ export default function App() {
                 linkedSteamId={linkedSteamId}
                 onUnlinkSteam={() => {
                   setLinkedSteamId(null);
-                  recomputeMastery(null).then(recomputeOverallMastery);
+                  recomputeMastery(null);
                 }}
                 onAddToWishlist={addToWishlist}
                 masteryScore={masteryScore}
