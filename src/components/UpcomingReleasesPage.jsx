@@ -42,6 +42,8 @@ export default function UpcomingReleasesPage({ onBack, isLoggedIn, userId, wishl
   const [releaseType, setReleaseType] = useState("all"); // "all" | "new"
 
   const [releases, setReleases] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | loading | ready | error | no_key
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export default function UpcomingReleasesPage({ onBack, isLoggedIn, userId, wishl
       loadMine();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, platformId, genreId, releaseType, userId]);
+  }, [mode, platformId, genreId, releaseType, userId, page]);
 
   async function loadEverything() {
     setStatus("loading");
@@ -74,12 +76,15 @@ export default function UpcomingReleasesPage({ onBack, isLoggedIn, userId, wishl
         platformId: platformId || undefined,
         genreId: genreId || undefined,
         excludeAdditions: releaseType === "new",
+        page,
       });
       if (result === "no_key") {
         setStatus("no_key");
         return;
       }
-      setReleases(result);
+      const list = Array.isArray(result) ? result : result.results;
+      setReleases(list);
+      setHasNext(Boolean(result.hasNext));
       setStatus("ready");
     } catch (err) {
       console.error("Upcoming releases fetch failed:", err);
@@ -159,7 +164,7 @@ export default function UpcomingReleasesPage({ onBack, isLoggedIn, userId, wishl
         <div className="backlog-add">
           <label className="currency-picker">
             <span>Platform</span>
-            <select value={platformId} onChange={(e) => setPlatformId(e.target.value)}>
+            <select value={platformId} onChange={(e) => { setPlatformId(e.target.value); setPage(1); setHasNext(false); }}>
               <option value="">All platforms</option>
               {platforms.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
@@ -168,7 +173,7 @@ export default function UpcomingReleasesPage({ onBack, isLoggedIn, userId, wishl
           </label>
           <label className="currency-picker">
             <span>Genre</span>
-            <select value={genreId} onChange={(e) => setGenreId(e.target.value)}>
+            <select value={genreId} onChange={(e) => { setGenreId(e.target.value); setPage(1); setHasNext(false); }}>
               <option value="">All genres</option>
               {genres.map((g) => (
                 <option key={g.id} value={g.id}>{g.name}</option>
@@ -177,11 +182,33 @@ export default function UpcomingReleasesPage({ onBack, isLoggedIn, userId, wishl
           </label>
           <label className="currency-picker">
             <span>Release type</span>
-            <select value={releaseType} onChange={(e) => setReleaseType(e.target.value)}>
+            <select value={releaseType} onChange={(e) => { setReleaseType(e.target.value); setPage(1); setHasNext(false); }}>
               <option value="all">Everything</option>
               <option value="new">New games only</option>
             </select>
           </label>
+        </div>
+      )}
+
+      {mode === "everything" && status !== "no_key" && status !== "error" && (page > 1 || hasNext) && (
+        <div className="backlog-add backlog-add--row">
+          <button
+            type="button"
+            className="quickdash-reset-btn"
+            disabled={page <= 1 || status === "loading"}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            Previous
+          </button>
+          <span className="panel__status">Page {page}</span>
+          <button
+            type="button"
+            className="quickdash-reset-btn"
+            disabled={!hasNext || status === "loading"}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            Next
+          </button>
         </div>
       )}
 

@@ -4537,6 +4537,16 @@ a.dash-drawer__community-link:hover {
 
 /* ---------- Under Construction overlay (Dashboards 2–6, still mock data) ---------- */
 
+/* Clips the strike's negative left/right so a rotated bleed doesn't
+   widen the page. The badge stays click-through with the strike. */
+.wip-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+}
+
 .wip-strike {
   position: absolute;
   left: -6%;
@@ -7075,6 +7085,12 @@ a.dash-drawer__community-link:hover {
   gap: 12px;
   padding: 16px 0;
   border-bottom: 1px solid var(--border);
+}
+
+.backlog-add--row {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .backlog-search-results {

@@ -134,6 +134,8 @@ purely so that setup is fully recoverable if/when mobile work resumes.
 
 ## In progress / recently touched (most recent first)
 
+- 2026-09-27 — **Health-check fixes (Steam chart names, RAWG key strip, collection overflow, command palette, sharp).** Steam `appdetails` is often keyed by an id other than the one requested (`data.steam_appid` is the real match); null names are no longer cached. RAWG `next`/`previous` no longer echo `RAWG_KEY` — Joshua still needs to rotate that key, it was already public. `UnderConstructionOverlay` clips its strike. Command palette includes Yu-Gi-Oh! and One Piece and labels the gaming library "Gaming Collection". Riftbound stays out of the palette. `sharp` devDependency is `^0.35.4`.
+
 - 2026-09-20 — **Achievement Tracker (Gaming sidebar, renamed from
   "Achievements"): collapsible trophy categories + real Xbox/PlayStation
   sync. PR #5, not yet merged.** Two pieces:

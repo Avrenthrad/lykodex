@@ -17,7 +17,7 @@ export function steamHeaderArt(appid) {
   return `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`;
 }
 
-import { getCached, setCached, CACHE_TTL } from "./cache";
+import { getCached, setCached, deleteCached, CACHE_TTL } from "./cache";
 import { API_BASE } from "./apiBase";
 
 export async function fetchOwnedGames(steamId) {
@@ -59,13 +59,17 @@ export async function fetchTopPlayedGames() {
 export async function resolveGameName(appId) {
   const cacheKey = `gd-appinfo:${appId}`;
   const cached = getCached(cacheKey, CACHE_TTL.ONE_DAY);
-  if (cached !== undefined) return cached;
+  // A missing name is a failed lookup, including the appdetails key
+  // mismatch that used to cache { name: null } for 24h. Treat that as
+  // a miss and drop it so the next load can resolve the real title.
+  if (cached?.name) return cached;
+  if (cached !== undefined) deleteCached(cacheKey);
 
   const res = await fetch(`${API_BASE}/api/steam?appid=${appId}&mode=appinfo`);
   if (!res.ok) throw new Error(`Failed to resolve name for appid ${appId}`);
   const data = await res.json(); // { name, thumb, releaseDate, comingSoon, metacriticScore, metacriticUrl, genres, steamAuPrice } or { name: null }
 
-  setCached(cacheKey, data);
+  if (data?.name) setCached(cacheKey, data);
   return data;
 }
 
