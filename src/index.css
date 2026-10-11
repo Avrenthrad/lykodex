@@ -4553,39 +4553,6 @@ a.dash-drawer__community-link:hover {
   flex-shrink: 0;
 }
 
-/* ---------- Under Construction overlay (Dashboards 2–6, still mock data) ---------- */
-
-.wip-strike {
-  position: absolute;
-  left: -6%;
-  right: -6%;
-  top: 50%;
-  height: 2px;
-  background: var(--alpha-yellow);
-  opacity: 0.5;
-  transform: rotate(-6deg);
-  pointer-events: none;
-  z-index: 5;
-}
-
-.wip-badge {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  background: rgba(242, 194, 48, 0.12);
-  border: 1px solid var(--alpha-yellow);
-  color: var(--alpha-yellow);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 4px 10px;
-  border-radius: 6px;
-  z-index: 6;
-  pointer-events: none;
-}
-
 /* ---------- G2A search link-out chip (no price data pulled, just a link) ---------- */
 
 .store-chip--search .store-chip__value {

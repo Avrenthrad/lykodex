@@ -36,16 +36,12 @@ const PAINTED_STATUSES = ["unassembled", "assembled", "primed", "partial", "fini
 const PAINTED_LABELS = { unassembled: "Unassembled", assembled: "Assembled", primed: "Primed", partial: "Partial", finished: "Finished" };
 const PAINTED_WEIGHT = { unassembled: 0, assembled: 0, primed: 0.25, partial: 0.5, finished: 1 };
 
-export default function TabletopHomePage({ onBack, isLoggedIn, userId, onSignIn, onCreateAccount }) {
+export default function TabletopHomePage({ isLoggedIn, userId, onSignIn, onCreateAccount }) {
   const [section, setSection] = useState("rpg"); // rpg | wargames | rules
 
   if (!isLoggedIn) {
     return (
       <div className="price-page">
-        <div className="price-page__head">
-          <button type="button" className="back-link" onClick={onBack}>← Back to Overview</button>
-          <p className="price-page__subtitle">Real campaigns, real session hours, real game history.</p>
-        </div>
         <div className="backlog-add">
           <button type="button" className="linking-row__connect" onClick={onSignIn}>Sign in</button>
           <button type="button" className="linking-row__connect" onClick={onCreateAccount}>Create account</button>
@@ -56,10 +52,6 @@ export default function TabletopHomePage({ onBack, isLoggedIn, userId, onSignIn,
 
   return (
     <div className="price-page">
-      <div className="price-page__head">
-        <button type="button" className="back-link" onClick={onBack}>← Back to Overview</button>
-        <p className="price-page__subtitle">Real campaigns and armies — yours, tracked honestly.</p>
-      </div>
 
       <div className="backlog-status-tabs">
         <button type="button" className={`quickdash-reset-btn ${section === "rpg" ? "quickdash-reset-btn--active" : ""}`} onClick={() => setSection("rpg")}>RPG</button>

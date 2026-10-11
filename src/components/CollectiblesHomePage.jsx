@@ -48,7 +48,7 @@ const PACKAGE_STATE_LABELS = {
 const CONDITIONS = ["mint", "near_mint", "good", "fair", "poor"];
 const CONDITION_LABELS = { mint: "Mint", near_mint: "Near Mint", good: "Good", fair: "Fair", poor: "Poor" };
 
-export default function CollectiblesHomePage({ onBack, isLoggedIn, userId, onSignIn, onCreateAccount, currency }) {
+export default function CollectiblesHomePage({ isLoggedIn, userId, onSignIn, onCreateAccount, currency }) {
   const [section, setSection] = useState("shelf"); // shelf | add | hardware | wishlist | stats | marketplace
   const [entries, setEntries] = useState([]);
   const [status, setStatus] = useState("idle");
@@ -92,10 +92,6 @@ export default function CollectiblesHomePage({ onBack, isLoggedIn, userId, onSig
   if (!isLoggedIn) {
     return (
       <div className="price-page">
-        <div className="price-page__head">
-          <button type="button" className="back-link" onClick={onBack}>← Back to Overview</button>
-          <p className="price-page__subtitle">Your real shelf — Pops, statues, LEGO, hardware, and more.</p>
-        </div>
         <div className="backlog-add">
           <button type="button" className="linking-row__connect" onClick={onSignIn}>Sign in</button>
           <button type="button" className="linking-row__connect" onClick={onCreateAccount}>Create account</button>
@@ -111,7 +107,6 @@ export default function CollectiblesHomePage({ onBack, isLoggedIn, userId, onSig
   return (
     <div className="price-page">
       <div className="price-page__head">
-        <button type="button" className="back-link" onClick={onBack}>← Back to Overview</button>
         <p className="price-page__subtitle">
           Scan a barcode, or search the real Funko Pop, LEGO (Rebrickable), or vinyl (Discogs)
           catalogs to add items fast — everything else stays honest manual entry.

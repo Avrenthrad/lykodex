@@ -831,7 +831,6 @@ export default function App() {
 
           {view === "college-entertainment" && (
             <EntertainmentHomePage
-              onBack={() => goTo("overview")}
               isLoggedIn={isLoggedIn}
               userId={userId}
               onSignIn={() => goTo("login", "login")}
@@ -863,7 +862,6 @@ export default function App() {
 
           {view === "college-collectibles" && (
             <CollectiblesHomePage
-              onBack={() => goTo("overview")}
               isLoggedIn={isLoggedIn}
               userId={userId}
               onSignIn={() => goTo("login", "login")}
@@ -873,7 +871,6 @@ export default function App() {
 
           {view === "college-tabletop" && (
             <TabletopHomePage
-              onBack={() => goTo("overview")}
               isLoggedIn={isLoggedIn}
               userId={userId}
               onSignIn={() => goTo("login", "login")}

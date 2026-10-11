@@ -26,7 +26,7 @@ const STATUS_LABELS = {
   dropped: "Dropped",
 };
 
-export default function EntertainmentHomePage({ onBack, isLoggedIn, userId, onSignIn, onCreateAccount, onGoToBooks, onGoToComics }) {
+export default function EntertainmentHomePage({ isLoggedIn, userId, onSignIn, onCreateAccount, onGoToBooks, onGoToComics }) {
   const [searchType, setSearchType] = useState("movie");
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -109,12 +109,6 @@ export default function EntertainmentHomePage({ onBack, isLoggedIn, userId, onSi
 
   return (
     <div className="price-page">
-      <div className="price-page__head">
-        <button type="button" className="back-link" onClick={onBack}>← Back to Overview</button>
-        <p className="price-page__subtitle">
-          Real movies, TV, anime, and books — via TMDB, AniList, and Open Library.
-        </p>
-      </div>
 
       {isLoggedIn && (
         <div className="backlog-add">
