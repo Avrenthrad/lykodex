@@ -2,6 +2,7 @@
 // third-party data / trademark notice.
 
 import { BUSINESS, LEGAL_PAGES } from "../lib/legal";
+import { routeHref } from "../lib/router";
 
 export default function SiteFooter() {
   const year = new Date().getFullYear();
@@ -9,7 +10,7 @@ export default function SiteFooter() {
     <footer className="site-footer">
       <nav className="site-footer__links" aria-label="Legal">
         {LEGAL_PAGES.map((p) => (
-          <a key={p.id} href={`#/${p.id}`} className="site-footer__link">
+          <a key={p.id} href={routeHref(p.id)} className="site-footer__link">
             {p.label}
           </a>
         ))}

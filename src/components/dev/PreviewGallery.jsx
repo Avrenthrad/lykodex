@@ -29,6 +29,7 @@ import OnboardingCollegePicker from "../OnboardingCollegePicker";
 import AccountLinkingPage from "../AccountLinkingPage";
 import { AccountGatePage, AccountGatePanel, AccountGatePopover } from "../AccountGate";
 import "../../styles/preview.css";
+import { readLocation, routeHref } from "../../lib/router";
 
 const noop = (label) => (...args) => console.log(`[preview] ${label}`, ...args);
 
@@ -53,7 +54,7 @@ const FAKE_OAUTH_SETTINGS = {
 const REAL_FETCH = window.fetch;
 
 function isPreviewRoute() {
-  return window.location.hash.replace(/^#\/?/, "").split("/")[0] === "preview";
+  return readLocation().view === "preview";
 }
 
 window.fetch = function previewGuardedFetch(input, init) {
@@ -142,7 +143,7 @@ export default function PreviewGallery() {
         {SECTIONS.map(([id, label]) => (
           <a
             key={id}
-            href="#/preview"
+            href={routeHref("preview")}
             onClick={(e) => {
               e.preventDefault();
               document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });

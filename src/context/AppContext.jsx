@@ -28,6 +28,13 @@ import { AppContext } from "./appContextInstance";
 import { initialWishlist } from "../data/wishlist";
 import { DEFAULT_DASHBOARD_LAYOUT } from "../data/dashboardLayout";
 import { isPackagedApp, isTauri } from "../lib/platform";
+import {
+  readLocation,
+  upgradeLegacyHash,
+  navigate,
+  subscribeToRoute,
+  interceptInternalLinks,
+} from "../lib/router";
 import { requestUpfrontPermissions } from "../lib/requestPermissions";
 import { DEFAULT_PLATFORM_ORDER } from "../data/platformOrder";
 import { supabase, supabaseConfigured } from "../lib/supabaseClient";
@@ -176,24 +183,23 @@ function isValidLayout(layout) {
   );
 }
 
-function parseHash(hash) {
-  const path = hash.replace(/^#\/?/, "");
-  const [view, sub] = path.split("/");
+// Current URL -> { view, loginMode } (see lib/router.js for how URLs
+// look on web vs packaged apps). An empty path is home (Overview); an
+// unknown one shows the not-found page rather than silently landing on
+// Overview, so a mistyped or stale link is obvious.
+function parseRoute() {
+  const { view, sub } = readLocation();
+  if (!view) return { view: "overview", loginMode: "login" };
   if (view === "login") {
     return { view: "login", loginMode: sub === "signup" ? "signup" : "login" };
   }
   return {
-    view: KNOWN_VIEWS.includes(view) ? view : "overview",
+    view: KNOWN_VIEWS.includes(view) ? view : "not-found",
     loginMode: "login",
   };
 }
 
-function hashFor(view, mode) {
-  if (view === "login") {
-    return `#/login/${mode === "signup" ? "signup" : "login"}`;
-  }
-  return `#/${view}`;
-}
+const isRoutableView = (view) => view === "login" || KNOWN_VIEWS.includes(view);
 
 // ---------- context ----------
 
@@ -722,17 +728,19 @@ export function AppProvider({ children }) {
     return () => clearTimeout(discordTrackingWriteTimerRef.current);
   }, [discordTrackingEnabled, userId]);
 
-  // ---------- effects: hash routing ----------
+  // ---------- effects: routing ----------
   useEffect(() => {
-    function syncFromHash() {
-      const parsed = parseHash(window.location.hash);
+    function syncFromRoute() {
+      const parsed = parseRoute();
       setView(parsed.view);
       setLoginMode(parsed.loginMode);
     }
 
-    window.addEventListener("hashchange", syncFromHash);
+    upgradeLegacyHash();
+    const unsubscribeRoute = subscribeToRoute(syncFromRoute);
+    const stopInterceptingLinks = interceptInternalLinks(isRoutableView);
 
-    if (!window.location.hash) {
+    if (!readLocation().view) {
       // The website intentionally allows anonymous browsing (most
       // pages already show real content with inline "Sign in to see X
       // here" prompts rather than a hard wall) — but a packaged
@@ -745,10 +753,10 @@ export function AppProvider({ children }) {
       // of just Gaming's.
       const defaultView = isPackagedApp() ? "login" : "overview";
       if (defaultView === "login") bootRedirectPendingRef.current = true;
-      window.history.replaceState(null, "", hashFor(defaultView));
+      if (defaultView !== "overview") navigate(defaultView, undefined, { replace: true });
       setView(defaultView);
     } else {
-      syncFromHash();
+      syncFromRoute();
     }
 
     requestUpfrontPermissions();
@@ -774,7 +782,10 @@ export function AppProvider({ children }) {
     const steamCallback = consumeSteamOpenIdCallback();
     if (steamCallback) pendingSteamCallbackRef.current = steamCallback;
 
-    return () => window.removeEventListener("hashchange", syncFromHash);
+    return () => {
+      unsubscribeRoute();
+      stopInterceptingLinks();
+    };
   }, []);
 
   // Captures the browser's own real IANA timezone (not a raw UTC
@@ -815,7 +826,7 @@ export function AppProvider({ children }) {
 
   // ---------- actions ----------
   const goTo = useCallback((nextView, mode) => {
-    window.location.hash = hashFor(nextView, mode);
+    navigate(nextView, nextView === "login" ? (mode === "signup" ? "signup" : "login") : undefined);
   }, []);
 
   // Completes the packaged-app boot redirect above: if a session was

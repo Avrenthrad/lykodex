@@ -35,6 +35,7 @@ import { initOAuthRedirectListener } from "./lib/oauthRedirect";
 const AccountLinkingPage = lazy(() => import("./components/AccountLinkingPage"));
 const AccountSettingsPage = lazy(() => import("./components/AccountSettingsPage"));
 const LegalPage = lazy(() => import("./components/LegalPage"));
+const NotFoundPage = lazy(() => import("./components/NotFoundPage"));
 const DashfeedSettingsPage = lazy(() => import("./components/DashfeedSettingsPage"));
 const PriceComparisonPage = lazy(() => import("./components/PriceComparisonPage"));
 const HypeChartsPage = lazy(() => import("./components/HypeChartsPage"));
@@ -951,6 +952,7 @@ export default function App() {
               onRecomputeMastery={recomputeMastery}
             />
           )}
+          {view === "not-found" && <NotFoundPage onGoHome={() => goTo("overview")} />}
           {["privacy", "terms", "refunds", "cookies"].includes(view) && (
             <LegalPage
               page={view}

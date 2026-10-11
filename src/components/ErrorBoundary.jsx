@@ -8,6 +8,7 @@
 
 import { Component } from "react";
 import LykodexLogo from "./LykodexLogo";
+import { routeHref, usesPathRouting } from "../lib/router";
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -24,8 +25,12 @@ export default class ErrorBoundary extends Component {
   }
 
   handleReload = () => {
-    window.location.hash = "#/dashboard";
-    window.location.reload();
+    if (usesPathRouting()) {
+      window.location.assign(routeHref("dashboard"));
+    } else {
+      window.location.hash = routeHref("dashboard");
+      window.location.reload();
+    }
   };
 
   render() {

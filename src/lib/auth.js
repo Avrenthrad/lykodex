@@ -97,7 +97,10 @@ export async function signInWithOAuth(provider) {
 
   const { error } = await supabase.auth.signInWithOAuth({
     provider,
-    options: { redirectTo: `${window.location.origin}${window.location.pathname}#/dashboard` },
+    // Always the site root + #/dashboard: this exact URL is on Supabase's
+    // redirect allow-list. lib/router.js turns #/dashboard into /dashboard
+    // on arrival.
+    options: { redirectTo: `${window.location.origin}/#/dashboard` },
   });
   if (error) throw error;
 }
@@ -153,7 +156,7 @@ export async function getSession() {
 export async function linkIdentity(provider) {
   const { data, error } = await supabase.auth.linkIdentity({
     provider,
-    options: { redirectTo: `${window.location.origin}${window.location.pathname}#/linking` },
+    options: { redirectTo: `${window.location.origin}/#/linking` },
   });
   if (error) throw error;
   return data; // { url } — caller should redirect the browser here
