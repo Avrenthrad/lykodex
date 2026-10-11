@@ -7,6 +7,7 @@
 // scripts must not load until the person accepts.
 
 import { useState } from "react";
+import { routeHref } from "../lib/router";
 
 const STORAGE_KEY = "lykodex-cookie-notice-seen";
 
@@ -35,7 +36,7 @@ export default function CookieNotice() {
     <div className="cookie-notice" role="region" aria-label="Cookie notice">
       <p className="cookie-notice__text">
         Lykodex only stores what it needs to keep you signed in and remember your settings. No ads, no analytics, no
-        tracking. <a href="#/cookies">Cookie Policy</a>
+        tracking. <a href={routeHref("cookies")}>Cookie Policy</a>
       </p>
       <button type="button" className="cookie-notice__btn" onClick={dismiss}>
         Got it

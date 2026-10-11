@@ -29,6 +29,7 @@ import { fetchMyFriendCode } from "../lib/friends";
 import { checkIsLykodexDelegate, deleteMyAccount } from "../lib/auth";
 import { useApp } from "../hooks/useApp";
 import CollegeIcon from "./CollegeIcon";
+import { routeHref } from "../lib/router";
 
 const platforms = [
   { id: "steam", label: "Steam", placeholder: "e.g. mysteamname" },
@@ -747,7 +748,7 @@ function DeleteAccountCard() {
       <h2 id="delete-account-title" className="settings-card__title">Delete account</h2>
       <p className="settings-card__note">
         Permanently deletes your account, everything you've added, your uploaded images and your linked accounts.
-        This can't be undone. See the <a href="#/privacy">Privacy Policy</a> for details.
+        This can't be undone. See the <a href={routeHref("privacy")}>Privacy Policy</a> for details.
       </p>
       <label className="api-key-field">
         <span>Type DELETE to confirm</span>

@@ -4,6 +4,7 @@
 
 import { useEffect } from "react";
 import { LEGAL_CONTENT, LEGAL_PAGES, LEGAL_LAST_UPDATED } from "../lib/legal";
+import { routeHref } from "../lib/router";
 
 export default function LegalPage({ page, onBack }) {
   const content = LEGAL_CONTENT[page];
@@ -32,7 +33,7 @@ export default function LegalPage({ page, onBack }) {
         {LEGAL_PAGES.map((p) => (
           <a
             key={p.id}
-            href={`#/${p.id}`}
+            href={routeHref(p.id)}
             className={`legal-page__tab${p.id === page ? " legal-page__tab--active" : ""}`}
             aria-current={p.id === page ? "page" : undefined}
           >

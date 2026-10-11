@@ -18,6 +18,7 @@ import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
 import CollectionConstellationBackground from "./CollectionConstellationBackground";
 import { COLLEGES } from "../data/colleges";
+import { routeHref } from "../lib/router";
 
 const CYCLE_MS = 2600;
 
@@ -369,8 +370,8 @@ export default function LoginPage({ onLoginSuccess, initialMode }) {
                     required
                   />
                   <span>
-                    I'm {MIN_AGE} or older and I agree to the <a href="#/terms">Terms of Service</a> and{" "}
-                    <a href="#/privacy">Privacy Policy</a>.
+                    I'm {MIN_AGE} or older and I agree to the <a href={routeHref("terms")}>Terms of Service</a> and{" "}
+                    <a href={routeHref("privacy")}>Privacy Policy</a>.
                   </span>
                 </label>
               )}
@@ -401,7 +402,7 @@ export default function LoginPage({ onLoginSuccess, initialMode }) {
             {mode === "login" && (
               <p className="auth-legal-note">
                 New here? Continuing with a provider creates an account. By doing so you confirm you're {MIN_AGE} or
-                older and agree to the <a href="#/terms">Terms</a> and <a href="#/privacy">Privacy Policy</a>.
+                older and agree to the <a href={routeHref("terms")}>Terms</a> and <a href={routeHref("privacy")}>Privacy Policy</a>.
               </p>
             )}
           </div>
