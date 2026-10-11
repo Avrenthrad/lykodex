@@ -1,16 +1,56 @@
-# React + Vite
+# Lykodex
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+One place for everything you collect, across five Colleges:
 
-Currently, two official plugins are available:
+| College | What it covers |
+|---|---|
+| **Gaming** | Game library (Steam, Xbox, PlayStation), wishlist prices across stores, backlog, achievements, release calendar |
+| **TCG** | Card search, collections, binders, decks and prices for Pokémon, Magic: The Gathering, One Piece, Flesh and Blood and Yu-Gi-Oh! |
+| **Library** | Movies, TV, anime, books and comics |
+| **Loot** | Collectibles: Funko Pops, LEGO, vinyl, statues and more, with barcode scanning |
+| **Wartable** | Tabletop campaigns, characters, armies and D&D 5e rules search |
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Plus friends, guilds, direct messages, a user-to-user TCG marketplace,
+Mastery scores and the Lykodex Discord bot.
 
-## React Compiler
+Run by the Lykodex Team at Lykosoft.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the Oxlint configuration
+- **Web app:** React 19 + Vite, plain CSS (`src/index.css`, tokens in `DESIGN_TOKENS.md`)
+- **Backend:** Supabase (auth, Postgres with row-level security, storage). Schema: `supabase/schema.sql`
+- **Server functions:** Vercel, in `api/`. These are third-party API proxies and anything needing the service-role key
+- **Desktop / mobile:** Tauri (`src-tauri/`) and Capacitor. See `PACKAGING.md`
+- **Discord bot:** `discord-bot/`, a separate always-on Node process on Railway. See its README
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Running locally
+
+```
+npm install
+cp .env.example .env   # fill in what you need; see the comments in that file
+npm run dev
+```
+
+You need `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for
+accounts. The other keys each power one integration (Steam, TMDB,
+price services and so on).
+
+`/api` functions only run under Vercel (`vercel dev`) or on a
+deployment. Plain `npm run dev` serves the front end only.
+
+## Scripts
+
+| Command | Does |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm run build` | Production build to `dist/` |
+| `npm run lint` | oxlint |
+| `npm run preview` | Serve the built app |
+| `npm run tauri:dev` / `tauri:build` | Desktop app |
+
+## Docs
+
+- `HANDOFF.md`: history and reasoning behind features
+- `DESIGN_TOKENS.md`: colours, type and component styles
+- `docs/COMPLIANCE.md`: privacy, legal and accessibility checklist
+- `PACKAGING.md`: desktop and mobile builds

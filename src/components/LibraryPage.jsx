@@ -38,7 +38,6 @@ import { fetchPlatformPlaytime } from "../lib/crossPlatformActivity";
 import { importSteamLibrary, importXboxLibrary, importPsnLibrary } from "../lib/libraryImport";
 import { fetchLiveGamerscore } from "../lib/xboxOAuth";
 import { fetchLiveTrophies } from "../lib/psnAuth";
-import UnderConstructionOverlay from "./UnderConstructionOverlay";
 import { AccountGatePanel } from "./AccountGate";
 import { LibraryGameCard, LibraryGameRow, PlatformTag } from "./LibraryGameCard";
 
@@ -335,8 +334,6 @@ export default function LibraryPage({
         <h1 className="price-page__title">Gaming Collection</h1>
         <p className="price-page__subtitle">Your owned games across Steam, Xbox, and PlayStation — tagged by platform.</p>
       </div>
-
-      {!isLoggedIn && <UnderConstructionOverlay />}
 
       {!isLoggedIn && (
         <AccountGatePanel message="Sign in to see your game library." onSignIn={onSignIn} onCreateAccount={onCreateAccount} />
