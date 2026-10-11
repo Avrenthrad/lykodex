@@ -12,6 +12,7 @@ import { getExchangeRates, formatPrice } from "../lib/currency";
 import { buildStoreRow, getCheapestInfo } from "./price/priceUtils";
 import { StoreChip } from "./price/StoreChip";
 import WishlistToggle from "./WishlistToggle";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 export default function GameCardPopup({
   gameTitle,
@@ -25,6 +26,7 @@ export default function GameCardPopup({
   onCreateAccount,
   platformOrder,
 }) {
+  useEscapeKey(onClose);
   const [deal, setDeal] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [rates, setRates] = useState(null);
@@ -64,7 +66,13 @@ export default function GameCardPopup({
 
   return (
     <div className="game-popup-backdrop" onClick={onClose}>
-      <div className="game-popup" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="game-popup"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={gameTitle}
+      >
         <button type="button" className="game-popup__close" onClick={onClose} aria-label="Close">
           ✕
         </button>

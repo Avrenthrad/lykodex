@@ -36,6 +36,7 @@ import UpdateCheckMenuItem from "./UpdateCheckMenuItem";
 import DownloadDesktopMenuItem from "./DownloadDesktopMenuItem";
 import CommunityQuickLinks from "./CommunityQuickLinks";
 import { accountXpFromMastery, levelFromXp } from "../lib/overallMastery";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 // Top-level College tabs. Order matters — this is the fixed display
 // order regardless of which ones a person actually selected during
@@ -354,6 +355,7 @@ export default function Header({
   }
 
   const showBackdrop = openMenu === "settings";
+  useEscapeKey(closeMenu, openMenu !== null);
 
   const activeCollegeId =
     currentView === "overview"

@@ -7,6 +7,7 @@
 // instead of being backfilled or invented.
 
 import { useEffect, useState } from "react";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 import { fetchCardKingdomPrices, normalizeMtgPrices, recordPriceSnapshot, fetchPriceHistory } from "../lib/tcgPricing";
 import PriceHistoryChart from "./PriceHistoryChart";
 
@@ -37,6 +38,7 @@ export function PriceChangeBadge({ history }) {
 }
 
 export default function MtgPriceHistoryModal({ card, onClose }) {
+  useEscapeKey(onClose);
   const [prices, setPrices] = useState([]);
   const [status, setStatus] = useState("loading");
   const [range, setRange] = useState(30);

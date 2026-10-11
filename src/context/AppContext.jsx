@@ -79,6 +79,11 @@ const KNOWN_VIEWS = [
   // built app falls through to Overview like any other bad hash.
   ...(import.meta.env.DEV ? ["preview"] : []),
   "dashboard",
+  // Legal pages — public, no sign-in needed (see lib/legal.js).
+  "privacy",
+  "terms",
+  "refunds",
+  "cookies",
   "linking",
   "settings",
   "dashfeed",
