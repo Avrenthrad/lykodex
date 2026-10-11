@@ -98,7 +98,20 @@ export default function InboxPage({ onBack, userId, isLoggedIn, onSignIn, onCrea
       {status === "ready" && conversations.length > 0 && (
         <ul className="backlog-list">
           {conversations.map((c) => (
-            <li key={c.friend_id} className="backlog-card" style={{ cursor: "pointer" }} onClick={() => openThread(c)}>
+            <li
+              key={c.friend_id}
+              className="backlog-card"
+              style={{ cursor: "pointer" }}
+              onClick={() => openThread(c)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openThread(c);
+                }
+              }}
+            >
               <MiniAvatar profile={c.profile} />
               <div className="backlog-card__info">
                 <span className="backlog-card__title">{displayName(c.profile)}</span>

@@ -11,6 +11,7 @@ import LykodexLogo from "./LykodexLogo";
 import GlitchLykodexLogo from "./GlitchLykodexLogo";
 import OAuthMark from "./OAuthMark";
 import { signUp, signIn, signInWithOAuth, fetchEnabledOAuthProviders } from "../lib/auth";
+import { MIN_AGE, LEGAL_LAST_UPDATED } from "../lib/legal";
 import { supabaseConfigured } from "../lib/supabaseClient";
 import { isPackagedApp } from "../lib/platform";
 import { Browser } from "@capacitor/browser";
@@ -87,6 +88,10 @@ export default function LoginPage({ onLoginSuccess, initialMode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  // Sign-up consent: unticked by default and required — no pre-ticked
+  // boxes. Also gates the OAuth buttons in sign-up mode, since those
+  // create an account too.
+  const [agreed, setAgreed] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [error, setError] = useState("");
 
@@ -160,6 +165,11 @@ export default function LoginPage({ onLoginSuccess, initialMode }) {
       return;
     }
 
+    if (mode === "signup" && !agreed) {
+      setOauthError(`Please confirm you're ${MIN_AGE} or older and agree to the Terms and Privacy Policy first.`);
+      return;
+    }
+
     setOauthLoading(provider);
     try {
       await signInWithOAuth(provider);
@@ -198,11 +208,16 @@ export default function LoginPage({ onLoginSuccess, initialMode }) {
       return;
     }
 
+    if (mode === "signup" && !agreed) {
+      setError(`Please confirm you're ${MIN_AGE} or older and agree to the Terms and Privacy Policy.`);
+      return;
+    }
+
     setStatus("loading");
     try {
       let result;
       if (mode === "signup") {
-        result = await signUp(email, password);
+        result = await signUp(email, password, { termsVersion: LEGAL_LAST_UPDATED, minAge: MIN_AGE });
       } else {
         result = await signIn(email, password);
       }
@@ -345,6 +360,21 @@ export default function LoginPage({ onLoginSuccess, initialMode }) {
                 </label>
               )}
 
+              {mode === "signup" && (
+                <label className="auth-consent">
+                  <input
+                    type="checkbox"
+                    checked={agreed}
+                    onChange={(e) => setAgreed(e.target.checked)}
+                    required
+                  />
+                  <span>
+                    I'm {MIN_AGE} or older and I agree to the <a href="#/terms">Terms of Service</a> and{" "}
+                    <a href="#/privacy">Privacy Policy</a>.
+                  </span>
+                </label>
+              )}
+
               {error && <p className="panel__status panel__status--error">{error}</p>}
 
               <button type="submit" className="auth-form__submit" disabled={status === "loading"}>
@@ -367,6 +397,13 @@ export default function LoginPage({ onLoginSuccess, initialMode }) {
               </div>
             )}
             {oauthError && <p className="panel__status panel__status--error">{oauthError}</p>}
+
+            {mode === "login" && (
+              <p className="auth-legal-note">
+                New here? Continuing with a provider creates an account. By doing so you confirm you're {MIN_AGE} or
+                older and agree to the <a href="#/terms">Terms</a> and <a href="#/privacy">Privacy Policy</a>.
+              </p>
+            )}
           </div>
         </section>
 

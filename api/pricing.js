@@ -2007,6 +2007,81 @@ async function handleCurrency(res) {
   }
 }
 
+// ---------- Account deletion (Privacy Policy "Keeping and deleting
+// your data") ----------
+// Deletes the CALLER's own account — the user id comes only from the
+// verified access token, never from the request body. Almost every
+// table references auth.users with ON DELETE CASCADE (or SET NULL for
+// shared things like guilds.created_by), so deleting the auth user
+// removes their rows. Two things cascade doesn't cover are handled
+// first: profiles.lykodex_delegate_user_id has no ON DELETE action
+// (it would block the delete), and Storage files, which live under a
+// `${userId}/` folder in each per-user bucket.
+const USER_STORAGE_BUCKETS = [
+  "avatars",
+  "wallpapers",
+  "guild-post-images",
+  "marketplace-photos",
+  "mtg-covers",
+  "fab-covers",
+  "pokemon-covers",
+  "entertainment-covers",
+  "collectible-covers",
+];
+
+async function removeUserStorage(adminClient, userId) {
+  for (const bucket of USER_STORAGE_BUCKETS) {
+    // Folder listings are paged; keep listing until it comes back empty
+    // (each pass deletes what it found, so offset stays 0).
+    for (let guard = 0; guard < 50; guard += 1) {
+      const { data: files, error } = await adminClient.storage.from(bucket).list(userId, { limit: 100 });
+      if (error) {
+        console.error(`account-delete: listing ${bucket} failed`, error.message);
+        break;
+      }
+      if (!files || files.length === 0) break;
+      const paths = files.map((f) => `${userId}/${f.name}`);
+      const { error: removeError } = await adminClient.storage.from(bucket).remove(paths);
+      if (removeError) {
+        console.error(`account-delete: removing from ${bucket} failed`, removeError.message);
+        break;
+      }
+    }
+  }
+}
+
+async function handleAccountDelete(req, res) {
+  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
+  try {
+    const { confirm } = req.body || {};
+    if (confirm !== "DELETE") return res.status(400).json({ error: "Missing confirmation" });
+
+    const { userId, adminClient } = await verifyCallerAndGetAdminClient(req);
+
+    // Never let an "Act as Lykodex" session delete the shared system account.
+    const { data: authUser } = await adminClient.auth.admin.getUserById(userId);
+    if (authUser?.user?.email === "system@lykodex.internal") {
+      return res.status(403).json({ error: "The Lykodex system account can't be deleted from here." });
+    }
+
+    const { error: delegateError } = await adminClient
+      .from("profiles")
+      .update({ lykodex_delegate_user_id: null })
+      .eq("lykodex_delegate_user_id", userId);
+    if (delegateError) throw delegateError;
+
+    await removeUserStorage(adminClient, userId);
+
+    const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
+    if (deleteError) throw deleteError;
+
+    return res.status(200).json({ deleted: true });
+  } catch (err) {
+    console.error("account-delete failed:", err);
+    return res.status(err.status || 500).json({ error: err.status ? err.message : "Couldn't delete the account" });
+  }
+}
+
 export default async function handler(req, res) {
   allowCors(res);
   // The browser's CORS preflight for a non-simple request (Xbox/PSN
@@ -2035,6 +2110,7 @@ export default async function handler(req, res) {
   if (service === "crunchyroll") return handleCrunchyroll(req, searchParams, res);
   if (service === "mastery-cron") return handleMasteryCron(req, res);
   if (service === "lykodex-session") return handleLykodexSession(req, res);
+  if (service === "account-delete") return handleAccountDelete(req, res);
 
   return res.status(400).json({ error: "Missing or invalid service parameter" });
 }

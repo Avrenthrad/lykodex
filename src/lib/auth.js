@@ -40,8 +40,18 @@ export async function fetchEnabledOAuthProviders() {
 // step as enabling the OAuth provider itself.
 export const OAUTH_CALLBACK_URL = "lykodex://auth-callback";
 
-export async function signUp(email, password) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+// consent: { termsVersion } — recorded on the auth user's metadata
+// with a timestamp, as a record that this person confirmed the minimum
+// age and agreed to the Terms and Privacy Policy when signing up.
+export async function signUp(email, password, consent) {
+  const metadata = consent
+    ? {
+        terms_accepted_at: new Date().toISOString(),
+        terms_version: consent.termsVersion,
+        age_confirmed: consent.minAge,
+      }
+    : undefined;
+  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: metadata } });
   if (error) throw error;
   return data;
 }
@@ -236,6 +246,24 @@ export async function checkIsLykodexDelegate() {
     return false;
   }
   return Boolean(data);
+}
+
+// Permanently deletes the signed-in person's own account and data
+// (server side: api/pricing.js handleAccountDelete). The caller should
+// sign out locally afterwards.
+export async function deleteMyAccount() {
+  const { data: current } = await supabase.auth.getSession();
+  const token = current.session?.access_token;
+  if (!token) throw new Error("Not signed in.");
+
+  const { API_BASE } = await import("./apiBase");
+  const res = await fetch(`${API_BASE}/api/pricing?service=account-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ confirm: "DELETE" }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body?.error || "Couldn't delete your account.");
 }
 
 // Exchanges the caller's own (already-verified-server-side) session
