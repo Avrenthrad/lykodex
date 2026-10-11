@@ -27,7 +27,7 @@ in the footer until you do.
 | 13 | Accessibility alt text | ✅ All `<img>` tags have `alt` (decorative ones use `alt=""`). | — |
 | 14 | Colour contrast | ✅ Fixed. `--text-tertiary` was 2.5–3.1:1 (now uses `--text-muted`, 4.6:1+). Light-mode accents were 1.9–3.9:1 (now deepened to 4.5:1+). Dark mode accents unchanged. | `index.css` |
 | 15 | Keyboard navigation | ✅ Skip-to-content link; Escape closes the header menu, game popup, confirm dialog and price-history modal; clickable list rows in Inbox and Price Watch now work with Enter/Space. Global `:focus-visible` outline already existed. | — |
-| 16 | Business details | ⚠️ Footer + policies are wired up. **Fill in `BUSINESS`.** | `lib/legal.js` |
+| 16 | Business details | ⚠️ Business name (Lykosoft) and team (Lykodex Team) set. **Still needed: contact email and state** (ABN optional; hidden while empty). | `lib/legal.js` |
 | 17 | Age consent for kids' data | ✅ 16+ minimum, confirmed at sign-up; policy says under-16 accounts get deleted on request. | — |
 | 18 | Unsubscribe link in emails | ✅ N/A. Lykodex only sends Supabase sign-in/confirmation emails (transactional). Any future marketing email needs an unsubscribe link (Spam Act 2003). | — |
 | 19 | License fonts/images | ✅ Fonts are Google Fonts (SIL Open Font License). ⚠️ See image notes below. | — |

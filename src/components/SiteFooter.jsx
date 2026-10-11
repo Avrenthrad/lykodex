@@ -18,7 +18,7 @@ export default function SiteFooter() {
         </a>
       </nav>
       <p className="site-footer__text">
-        © {year} {BUSINESS.name}
+        © {year} {BUSINESS.name} · {BUSINESS.team}
         {BUSINESS.abn ? ` · ABN ${BUSINESS.abn}` : ""} · {BUSINESS.email}
       </p>
       <p className="site-footer__text site-footer__text--fine">
