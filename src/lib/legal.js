@@ -6,15 +6,17 @@
 // Privacy Principles, Australian Consumer Law). These are good-faith
 // drafts, not legal advice. Have them reviewed before relying on them.
 //
-// FILL IN: everything in BUSINESS below. It's shown in the footer and
-// inside every policy, so placeholders stay visible until replaced.
+// FILL IN: the remaining [BRACKETED] values in BUSINESS below. They're
+// shown in the footer and inside every policy, so placeholders stay
+// visible until replaced. abn is hidden while empty.
 //
 // Keep "What we collect" and "Who we share it with" in sync with
 // docs/COMPLIANCE.md whenever a new data source or service is added.
 
 export const BUSINESS = {
-  name: "[YOUR NAME OR BUSINESS NAME]",
-  abn: "[ABN, if you have one]",
+  name: "Lykosoft",
+  team: "Lykodex Team",
+  abn: "",
   email: "[CONTACT EMAIL]",
   state: "[YOUR STATE OR TERRITORY]",
 };
@@ -29,14 +31,14 @@ export const LEGAL_PAGES = [
   { id: "cookies", label: "Cookie Policy" },
 ];
 
-const contact = `${BUSINESS.name} — ${BUSINESS.email}`;
+const contact = `${BUSINESS.team}, ${BUSINESS.name} — ${BUSINESS.email}`;
 
 // Each page: { title, intro, sections: [{ heading, paragraphs?, list? }] }
 export const LEGAL_CONTENT = {
   privacy: {
     title: "Privacy Policy",
     intro:
-      `This policy explains what personal information Lykodex collects, why, and what you can do about it. Lykodex is run by ${BUSINESS.name}${BUSINESS.abn ? ` (ABN ${BUSINESS.abn})` : ""}, and we follow the Australian Privacy Principles in the Privacy Act 1988 (Cth).`,
+      `This policy explains what personal information Lykodex collects, why, and what you can do about it. Lykodex is run by the ${BUSINESS.team} at ${BUSINESS.name}${BUSINESS.abn ? ` (ABN ${BUSINESS.abn})` : ""}, and we follow the Australian Privacy Principles in the Privacy Act 1988 (Cth).`,
     sections: [
       {
         heading: "What we collect",
