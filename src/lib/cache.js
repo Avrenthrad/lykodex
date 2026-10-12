@@ -28,6 +28,14 @@ export function setCached(key, value) {
   }
 }
 
+export function deleteCached(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Storage unavailable — nothing to drop.
+  }
+}
+
 // Common TTLs used across the app's API caches.
 export const CACHE_TTL = {
   ONE_DAY: 24 * 60 * 60 * 1000,
