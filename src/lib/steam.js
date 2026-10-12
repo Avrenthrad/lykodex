@@ -3,19 +3,14 @@
 // Steam blocks direct browser requests, so this proxy is required,
 // not just a nice-to-have like it is for CheapShark.
 
-// Steam's public CDN box art — no API key needed, just an appid, and
-// no proxy required since these are plain static image URLs (verified
-// live: 200 for a real appid, 404 for a bogus one — not a guessed
-// shape). Real box art instead of the 32x32 img_icon_url used to be
-// the only image available for a game row, which is fine at true icon
-// size but was previously stretched up as a "hero" thumbnail.
-export function steamLibraryArt(appid) {
-  return `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`;
-}
-
-export function steamHeaderArt(appid) {
-  return `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`;
-}
+// Unhashed CDN paths live in steamArt.js. Re-exported so existing
+// imports keep working; render through SteamArt, not these URLs alone.
+export {
+  steamLibraryArt,
+  steamHeaderArt,
+  steamHeroArt,
+  steamCapsuleArt,
+} from "./steamArt.js";
 
 import { getCached, setCached, deleteCached, CACHE_TTL } from "./cache";
 import { API_BASE } from "./apiBase";

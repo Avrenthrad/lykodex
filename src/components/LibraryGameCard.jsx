@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SteamArt from "./SteamArt";
 
 const PLATFORM_LABELS = { steam: "Steam", xbox: "Xbox", playstation: "PlayStation" };
 
@@ -146,24 +147,28 @@ export function LibraryRatingButton({ rating, avgRating, onSubmit }) {
   );
 }
 
-export function LibraryGameCard({ game, formatPlaytime, steamHeaderArt }) {
+function LibrarySteamIcon({ appid, iconHash }) {
+  const [failed, setFailed] = useState(false);
+  if (!appid || !iconHash || failed) {
+    return <span className="library-table__icon library-table__icon--placeholder" aria-hidden="true" />;
+  }
+  return (
+    <img
+      src={`https://media.steampowered.com/steamcommunity/public/images/apps/${appid}/${iconHash}.jpg`}
+      alt=""
+      className="library-table__icon"
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+export function LibraryGameCard({ game, formatPlaytime }) {
   return (
     <li className="backlog-card library-game-card">
       {game.steamAppid ? (
-        <img
-          src={steamHeaderArt(game.steamAppid)}
-          alt=""
-          className="backlog-card__thumb"
-          decoding="async"
-          onError={(e) => {
-            e.target.onerror = null;
-            if (game.imgIconUrl) {
-              e.target.src = `https://media.steampowered.com/steamcommunity/public/images/apps/${game.steamAppid}/${game.imgIconUrl}.jpg`;
-            } else {
-              e.target.style.display = "none";
-            }
-          }}
-        />
+        <SteamArt appid={game.steamAppid} className="backlog-card__thumb" alt="" loading="lazy" />
       ) : (
         <div className="backlog-card__thumb backlog-card__thumb--placeholder" />
       )}
@@ -193,13 +198,7 @@ export function LibraryGameRow({
       <td>
         <div className="library-table__game">
           {game.steamAppid && game.imgIconUrl && (
-            <img
-              src={`https://media.steampowered.com/steamcommunity/public/images/apps/${game.steamAppid}/${game.imgIconUrl}.jpg`}
-              alt=""
-              className="library-table__icon"
-              loading="lazy"
-              decoding="async"
-            />
+            <LibrarySteamIcon appid={game.steamAppid} iconHash={game.imgIconUrl} />
           )}
           <div className="library-table__game-copy">
             <span>{game.title}</span>

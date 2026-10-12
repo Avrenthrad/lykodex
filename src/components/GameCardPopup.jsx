@@ -13,6 +13,7 @@ import { buildStoreRow, getCheapestInfo } from "./price/priceUtils";
 import { StoreChip } from "./price/StoreChip";
 import WishlistToggle from "./WishlistToggle";
 import { useEscapeKey } from "../hooks/useEscapeKey";
+import SteamArt from "./SteamArt";
 
 export default function GameCardPopup({
   gameTitle,
@@ -85,8 +86,13 @@ export default function GameCardPopup({
         {status === "ready" && deal && (
           <>
             <div className="wishlist-card__main">
-              {deal.thumb ? (
-                <img src={deal.thumb} alt="" className="wishlist-card__thumb" decoding="async" />
+              {deal.steamAppID || deal.thumb ? (
+                <SteamArt
+                  appid={deal.steamAppID}
+                  headerImage={deal.thumb}
+                  className="wishlist-card__thumb"
+                  alt=""
+                />
               ) : (
                 <div className="wishlist-card__thumb wishlist-card__thumb--placeholder" />
               )}

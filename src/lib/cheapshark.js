@@ -133,6 +133,7 @@ export async function fetchTopDeals(limit = 6) {
     .map((d) => ({
       title: d.title,
       thumb: d.thumb,
+      steamAppID: d.steamAppID || null,
       store: storeNames[d.storeID] || `Store #${d.storeID}`,
       price: parseFloat(d.salePrice),
       normalPrice: parseFloat(d.normalPrice),

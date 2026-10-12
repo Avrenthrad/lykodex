@@ -1,6 +1,7 @@
 // Full release calendar grid + day detail — used on the dedicated page.
 
 import { useMemo, useState } from "react";
+import SteamArt from "./SteamArt";
 import { useReleaseCalendar } from "../hooks/useReleaseCalendar";
 import {
   RELEASE_WINDOW_DAYS,
@@ -14,6 +15,29 @@ import {
   platformShort,
   toDateKey,
 } from "../lib/releaseCalendar";
+
+export function ReleaseArt({ entry, className, title }) {
+  if (entry.appid) {
+    return (
+      <SteamArt
+        appid={entry.appid}
+        fallbackImage={entry.imageUrl}
+        className={className}
+        alt=""
+        loading="lazy"
+        title={title}
+      />
+    );
+  }
+  return (
+    <span
+      className={className}
+      title={title}
+      style={entry.imageUrl ? { backgroundImage: `url(${entry.imageUrl})` } : undefined}
+      aria-hidden={title ? undefined : true}
+    />
+  );
+}
 
 export default function ReleaseCalendar({ wishlist, linkedSteamId, className = "" }) {
   const now = new Date();
@@ -92,10 +116,10 @@ export default function ReleaseCalendar({ wishlist, linkedSteamId, className = "
                   {hasReleases && (
                     <div className="release-cal__tiles">
                       {cell.releases.slice(0, 2).map((entry) => (
-                        <span
+                        <ReleaseArt
                           key={entry.id}
+                          entry={entry}
                           className={`release-cal__tile ${entry.isSteamWishlist ? "release-cal__tile--steam" : ""} ${entry.isLykodexWishlist ? "release-cal__tile--wishlist" : ""}`}
-                          style={entry.imageUrl ? { backgroundImage: `url(${entry.imageUrl})` } : undefined}
                           title={entry.name}
                         />
                       ))}
@@ -128,11 +152,7 @@ export default function ReleaseCalendar({ wishlist, linkedSteamId, className = "
 
                   return (
                     <li key={entry.id} className="release-cal__detail-row">
-                      <div
-                        className="release-cal__detail-art"
-                        style={entry.imageUrl ? { backgroundImage: `url(${entry.imageUrl})` } : undefined}
-                        aria-hidden="true"
-                      />
+                      <ReleaseArt entry={entry} className="release-cal__detail-art" />
                       <div className="release-cal__detail-body">
                         <span className="release-cal__detail-name" title={entry.name}>{entry.name}</span>
                         <div className="release-cal__detail-meta">

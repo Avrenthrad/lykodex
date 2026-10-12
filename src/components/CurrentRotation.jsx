@@ -19,7 +19,7 @@ import { fetchOwnedGames } from "../lib/steam";
 import { fetchBacklog, STATUS_LABELS } from "../lib/backlog";
 import { fetchContinuePlayingSlides } from "../lib/friendsData";
 import { searchRawgGamesAndDlc } from "../lib/rawg";
-import { steamHeaderArt } from "../lib/steam";
+import SteamArt from "./SteamArt";
 
 const STORAGE_KEY = "gd-current-rotation";
 const MAX_PINS = 4;
@@ -419,7 +419,7 @@ export default function CurrentRotation({
             onClick={onOpenLibrary}
             key={featuredSlide.label}
           >
-            <img src={steamHeaderArt(featuredSlide.appid)} alt="" decoding="async" />
+            <SteamArt appid={featuredSlide.appid} variant="hero" fill alt="" />
             <div className="current-rotation__featured-overlay">
               <span className="current-rotation__featured-title">{featuredSlide.gameName}</span>
               {featuredSlide.isCurrentlyPlaying && (

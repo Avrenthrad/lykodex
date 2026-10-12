@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchTopPlayedGames, resolveGameName } from "../lib/steam";
+import SteamArt from "./SteamArt";
 import GameCardPopup from "./GameCardPopup";
 
 const TOTAL_COUNT = 100;
@@ -132,11 +133,14 @@ export default function HypeChartsPage({
                 disabled={!row.name}
               >
                 <span className="hype-row__rank">#{row.rank}</span>
-                {row.thumb ? (
-                  <img src={row.thumb} alt="" className="hype-row__thumb" loading="lazy" decoding="async" />
-                ) : (
-                  <div className="hype-row__thumb hype-row__thumb--placeholder" />
-                )}
+                <SteamArt
+                  appid={row.appid}
+                  headerImage={row.thumb}
+                  className="hype-row__thumb"
+                  alt=""
+                  loading="lazy"
+                  resolveHeader={false}
+                />
                 <span className="hype-row__name">{row.name || "Loading…"}</span>
                 <span className="hype-row__players">
                   {(row.concurrent_in_game ?? row.peak_in_game ?? row.players ?? null)?.toLocaleString() ?? "—"} playing
