@@ -46,6 +46,8 @@ export default function SteamArt({
   const attempts = useRef(0);
   const lookupStarted = useRef(false);
   const generation = useRef(0);
+  const handledSrc = useRef(null);
+  const renderGen = generation.current;
 
   useEffect(() => {
     // Re-read the cache only when the game changes. Writing a winner
@@ -60,6 +62,7 @@ export default function SteamArt({
     setShown(false);
     attempts.current = 0;
     lookupStarted.current = false;
+    handledSrc.current = null;
   }, [appid, variant, explicitHeader]);
 
   const urls = useMemo(() => {
@@ -83,6 +86,9 @@ export default function SteamArt({
   }
 
   function handleError(event) {
+    if (generation.current !== renderGen) return;
+    if (handledSrc.current === src) return;
+    handledSrc.current = src;
     event.currentTarget.style.opacity = "0";
     attempts.current += 1;
     if (attempts.current > MAX_ATTEMPTS) {
@@ -118,9 +124,21 @@ export default function SteamArt({
   }
 
   function handleLoad() {
+    if (generation.current !== renderGen) return;
     setShown(true);
     const current = urls[index];
     if (current) writeCachedSteamArt(appid, variant, current);
+  }
+
+  function takeImg(node) {
+    if (!node || !node.complete || generation.current !== renderGen) return;
+    // A cached file can finish before React binds onLoad/onError, which
+    // left the frame at opacity 0 — an empty dark box over a real image.
+    if (node.naturalWidth > 0) {
+      handleLoad();
+      return;
+    }
+    handleError({ currentTarget: node });
   }
 
   const frameClass = [
@@ -135,6 +153,7 @@ export default function SteamArt({
       {src && (
         <img
           key={src}
+          ref={takeImg}
           src={src}
           alt={alt}
           loading={loading}
