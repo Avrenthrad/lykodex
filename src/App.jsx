@@ -24,6 +24,8 @@ import LoadingSplash from "./components/LoadingSplash";
 import PageLoadingFallback from "./components/PageLoadingFallback";
 import DesktopUpdateBanner from "./components/DesktopUpdateBanner";
 import AndroidUpdateBanner from "./components/AndroidUpdateBanner";
+import SiteFooter from "./components/SiteFooter";
+import CookieNotice from "./components/CookieNotice";
 import GamingDashboard from "./components/GamingDashboard";
 
 import { useApp } from "./hooks/useApp";
@@ -32,6 +34,7 @@ import { initOAuthRedirectListener } from "./lib/oauthRedirect";
 // Lazy-loaded secondary pages (same rationale as before)
 const AccountLinkingPage = lazy(() => import("./components/AccountLinkingPage"));
 const AccountSettingsPage = lazy(() => import("./components/AccountSettingsPage"));
+const LegalPage = lazy(() => import("./components/LegalPage"));
 const DashfeedSettingsPage = lazy(() => import("./components/DashfeedSettingsPage"));
 const PriceComparisonPage = lazy(() => import("./components/PriceComparisonPage"));
 const HypeChartsPage = lazy(() => import("./components/HypeChartsPage"));
@@ -136,6 +139,8 @@ export default function App() {
     setShareActivityWithGuilds,
     readReceiptsEnabled,
     setReadReceiptsEnabled,
+    discordTrackingEnabled,
+    setDiscordTrackingEnabled,
     xbxpricesKey,
     setXbxpricesKey,
     platpricesKey,
@@ -285,6 +290,15 @@ export default function App() {
   } else {
     content = (
       <>
+        {/* Keyboard users: jump past the header nav. A button rather
+            than an href="#main" link, since # is the router. */}
+        <button
+          type="button"
+          className="skip-link"
+          onClick={() => document.getElementById("main-content")?.focus()}
+        >
+          Skip to content
+        </button>
         <Header
           onNavigateView={navigateToView}
           onNavigateHome={navigateHome}
@@ -318,7 +332,7 @@ export default function App() {
               onToggleCollapsed={() => setCollegeSidebarOpen((open) => !open)}
             />
           )}
-          <div className={`dash ${view === "prices" ? "dash--wide" : ""}`}>
+          <main id="main-content" tabIndex={-1} className={`dash ${view === "prices" ? "dash--wide" : ""}`}>
           {view === "linking" &&
             (isLoggedIn ? (
               <AccountLinkingPage
@@ -327,7 +341,7 @@ export default function App() {
                 linkedSteamId={linkedSteamId}
                 onUnlinkSteam={() => {
                   setLinkedSteamId(null);
-                  recomputeMastery(null).then(recomputeOverallMastery);
+                  recomputeMastery(null);
                 }}
                 onAddToWishlist={addToWishlist}
                 masteryScore={masteryScore}
@@ -379,6 +393,8 @@ export default function App() {
                 onShareActivityWithGuildsChange={setShareActivityWithGuilds}
                 readReceiptsEnabled={readReceiptsEnabled}
                 onReadReceiptsEnabledChange={setReadReceiptsEnabled}
+                discordTrackingEnabled={discordTrackingEnabled}
+                onDiscordTrackingEnabledChange={setDiscordTrackingEnabled}
                 userId={userId}
                 onGoToFriends={() => goTo("friends")}
               />
@@ -815,7 +831,6 @@ export default function App() {
 
           {view === "college-entertainment" && (
             <EntertainmentHomePage
-              onBack={() => goTo("overview")}
               isLoggedIn={isLoggedIn}
               userId={userId}
               onSignIn={() => goTo("login", "login")}
@@ -847,7 +862,6 @@ export default function App() {
 
           {view === "college-collectibles" && (
             <CollectiblesHomePage
-              onBack={() => goTo("overview")}
               isLoggedIn={isLoggedIn}
               userId={userId}
               onSignIn={() => goTo("login", "login")}
@@ -857,7 +871,6 @@ export default function App() {
 
           {view === "college-tabletop" && (
             <TabletopHomePage
-              onBack={() => goTo("overview")}
               isLoggedIn={isLoggedIn}
               userId={userId}
               onSignIn={() => goTo("login", "login")}
@@ -938,8 +951,15 @@ export default function App() {
               onRecomputeMastery={recomputeMastery}
             />
           )}
+          {["privacy", "terms", "refunds", "cookies"].includes(view) && (
+            <LegalPage
+              page={view}
+              onBack={() => (window.history.length > 1 ? window.history.back() : goTo("overview"))}
+            />
+          )}
+        </main>
         </div>
-        </div>
+        <SiteFooter />
       </>
     );
   }
@@ -950,6 +970,7 @@ export default function App() {
       <Suspense fallback={<PageLoadingFallback />}>{content}</Suspense>
       <DesktopUpdateBanner />
       <AndroidUpdateBanner />
+      <CookieNotice />
       {paletteOpen && (
         <Suspense fallback={null}>
           <CommandPalette

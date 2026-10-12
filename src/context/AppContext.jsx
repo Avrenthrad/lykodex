@@ -79,6 +79,11 @@ const KNOWN_VIEWS = [
   // built app falls through to Overview like any other bad hash.
   ...(import.meta.env.DEV ? ["preview"] : []),
   "dashboard",
+  // Legal pages — public, no sign-in needed (see lib/legal.js).
+  "privacy",
+  "terms",
+  "refunds",
+  "cookies",
   "linking",
   "settings",
   "dashfeed",
@@ -278,6 +283,9 @@ export function AppProvider({ children }) {
   // too, the same "both sides opted in, or neither sees anything"
   // model most messaging apps use — see InboxPage.jsx.
   const [readReceiptsEnabled, setReadReceiptsEnabled] = useState(true);
+  // Opt-in for the Lykodex Discord bot recording playtime, voice chat,
+  // Spotify and Watching time (profiles.discord_tracking_enabled).
+  const [discordTrackingEnabled, setDiscordTrackingEnabled] = useState(false);
   const [xbxpricesKey, setXbxpricesKey] = useState("");
   const [platpricesKey, setPlatpricesKey] = useState("");
 
@@ -365,6 +373,7 @@ export function AppProvider({ children }) {
   const hydratedRef = useRef(false);
   const writeTimerRef = useRef(null);
   const wallpaperWriteTimerRef = useRef(null);
+  const discordTrackingWriteTimerRef = useRef(null);
   // True only when the hash-routing init effect defaulted a packaged
   // app straight to "login" with no explicit hash — lets the
   // auth-session effect below bounce a person with an already-
@@ -520,6 +529,7 @@ export function AppProvider({ children }) {
       setXbxpricesKey("");
       setPlatpricesKey("");
       setShareActivityWithGuilds(false);
+      setDiscordTrackingEnabled(false);
       // Layout deliberately kept — still useful offline
       return;
     }
@@ -563,6 +573,7 @@ export function AppProvider({ children }) {
         setCurrency(profile.currency || "AUD");
         setShareActivityWithGuilds(profile.share_activity_with_guilds || false);
         setReadReceiptsEnabled(profile.read_receipts_enabled !== false);
+        setDiscordTrackingEnabled(profile.discord_tracking_enabled === true);
         setXbxpricesKey(profile.xbxprices_key || "");
         setPlatpricesKey(profile.platprices_key || "");
         if (profile.dashfeed_games) setGameToggles(profile.dashfeed_games);
@@ -693,6 +704,23 @@ export function AppProvider({ children }) {
 
     return () => clearTimeout(wallpaperWriteTimerRef.current);
   }, [wallpaperUrl, userId]);
+
+  // ---------- effects: Discord tracking opt-in write-back (isolated) ----------
+  // Same isolation reason as wallpaper above: discord_tracking_enabled
+  // is a new column (supabase/schema.sql) that may not exist yet, and
+  // bundling it into the big update would break every other save.
+  useEffect(() => {
+    if (!supabaseConfigured || !userId || !hydratedRef.current) return;
+
+    clearTimeout(discordTrackingWriteTimerRef.current);
+    discordTrackingWriteTimerRef.current = setTimeout(() => {
+      upsertProfile(userId, { discord_tracking_enabled: discordTrackingEnabled }).catch((err) =>
+        console.error("Failed to save Discord tracking opt-in (has the discord tracking migration been run?):", err)
+      );
+    }, 500);
+
+    return () => clearTimeout(discordTrackingWriteTimerRef.current);
+  }, [discordTrackingEnabled, userId]);
 
   // ---------- effects: hash routing ----------
   useEffect(() => {
@@ -1046,6 +1074,20 @@ export function AppProvider({ children }) {
   // unlinking Steam, the caller passes the new value directly rather
   // than relying on the linkedSteamId this closure captured, since
   // setLinkedSteamId's update isn't visible here yet in the same tick.
+  const applyOverallMasteryResult = useCallback((result) => {
+    setOverallMasteryScore(result.overallScore);
+    setOverallMasteryXp(result.accountXp);
+    setOverallMasteryLevel(result.accountLevel);
+    setOverallMasteryBreakdown(result.breakdown);
+    setOverallMasteryComputedAt(result.computedAt);
+  }, []);
+
+  // Also recomputes Overall Mastery straight after, with the fresh
+  // Gaming score passed in directly. Gaming is one of Overall's
+  // Colleges, so recomputing Gaming alone used to leave the header's
+  // Overall score (and the Overview chart) stale — and the old
+  // recomputeMastery().then(recomputeOverallMastery) chains read the
+  // *previous* masteryScore from their closure, not the new one.
   const recomputeMastery = useCallback(async (steamIdOverride) => {
     if (!supabaseConfigured || !userId) return;
     try {
@@ -1056,28 +1098,58 @@ export function AppProvider({ children }) {
       setMasteryLevel(result.accountLevel);
       setMasteryBreakdown(result.breakdown);
       setMasteryComputedAt(result.computedAt);
+      applyOverallMasteryResult(await recomputeOverallMasteryData(userId, result.masteryScore));
     } catch (err) {
       console.error("Failed to recompute Game Mastery:", err);
     }
-  }, [userId, linkedSteamId]);
+  }, [userId, linkedSteamId, applyOverallMasteryResult]);
 
-  // Recomputes the Overall Mastery Score (all 5 Colleges combined).
-  // Uses whatever Gaming Mastery score is currently in state — call
-  // recomputeMastery() first if that also needs a fresh Steam pull;
-  // this doesn't duplicate that fetch itself.
+  // Recomputes the Overall Mastery Score (all 5 Colleges combined)
+  // using the Gaming Mastery score currently in state. For a fresh
+  // Steam pull as well, call recomputeMastery() instead — it does both.
   const recomputeOverallMastery = useCallback(async () => {
     if (!supabaseConfigured || !userId) return;
     try {
-      const result = await recomputeOverallMasteryData(userId, masteryScore);
-      setOverallMasteryScore(result.overallScore);
-      setOverallMasteryXp(result.accountXp);
-      setOverallMasteryLevel(result.accountLevel);
-      setOverallMasteryBreakdown(result.breakdown);
-      setOverallMasteryComputedAt(result.computedAt);
+      applyOverallMasteryResult(await recomputeOverallMasteryData(userId, masteryScore));
     } catch (err) {
       console.error("Failed to recompute Overall Mastery:", err);
     }
-  }, [userId, masteryScore]);
+  }, [userId, masteryScore, applyOverallMasteryResult]);
+
+  // The server also recomputes Mastery on its own (the daily Xbox/PSN
+  // cron in api/pricing.js and the Discord bot's daily refresh), but a
+  // page that's already open never re-read it. Pick those changes up
+  // whenever the tab comes back into focus — at most once a minute.
+  const lastMasteryRefreshRef = useRef(0);
+  useEffect(() => {
+    if (!supabaseConfigured || !userId) return;
+    function refreshMasteryFromServer() {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastMasteryRefreshRef.current < 60000) return;
+      lastMasteryRefreshRef.current = Date.now();
+      fetchProfile(userId)
+        .then((profile) => {
+          setMasteryScore(profile.mastery_score || 0);
+          setMasteryXp(profile.mastery_xp || 0);
+          setMasteryLevel(profile.mastery_level || 0);
+          setMasteryBreakdown(profile.mastery_breakdown || []);
+          setMasteryComputedAt(profile.mastery_computed_at || null);
+          setOverallMasteryScore(profile.overall_mastery_score || 0);
+          setOverallMasteryXp(profile.overall_mastery_xp || 0);
+          setOverallMasteryLevel(profile.overall_mastery_level || 0);
+          setOverallMasteryBreakdown(profile.overall_mastery_breakdown || []);
+          setOverallMasteryComputedAt(profile.overall_mastery_computed_at || null);
+        })
+        .catch((err) => console.error("Mastery refresh failed:", err));
+    }
+    lastMasteryRefreshRef.current = Date.now(); // initial hydrate just loaded it
+    document.addEventListener("visibilitychange", refreshMasteryFromServer);
+    window.addEventListener("focus", refreshMasteryFromServer);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshMasteryFromServer);
+      window.removeEventListener("focus", refreshMasteryFromServer);
+    };
+  }, [userId]);
 
   // Completes the real "Sign in through Steam" link once a real
   // session is confirmed — same shape as the Xbox web-path effect
@@ -1087,11 +1159,11 @@ export function AppProvider({ children }) {
   // bundling their library import; AccountLinkingPage's own "Import
   // Steam Wishlist" button (or the existing "Resync Steam wishlist"
   // on the Prices page) is still the actual import step. Mirrors the
-  // same recomputeMastery(steamId).then(recomputeOverallMastery) call
+  // same recomputeMastery(steamId) call (which also refreshes Overall)
   // the old manual-entry onLinkSteam wrapper made in App.jsx, so
   // linking still triggers a fresh Mastery snapshot the same way.
   //
-  // Must stay below recomputeMastery/recomputeOverallMastery's own
+  // Must stay below recomputeMastery's own
   // declarations above — referencing them any earlier in this
   // component's dependency array (evaluated eagerly during render,
   // unlike the effect body itself) is a genuine temporal-dead-zone
@@ -1109,7 +1181,7 @@ export function AppProvider({ children }) {
         setLinkedSteamId(steamId);
         setSteamLinkStatus("success");
         setSteamLinkResult({ steamId });
-        recomputeMastery(steamId).then(recomputeOverallMastery);
+        recomputeMastery(steamId);
         goTo("linking");
       })
       .catch((err) => {
@@ -1118,7 +1190,7 @@ export function AppProvider({ children }) {
         setSteamLinkResult({ error: err.message });
         goTo("linking");
       });
-  }, [isLoggedIn, goTo, recomputeMastery, recomputeOverallMastery]);
+  }, [isLoggedIn, goTo, recomputeMastery]);
 
   // ---------- value (memoized so consumers don't re-render for nothing) ----------
   const value = useMemo(
@@ -1187,6 +1259,8 @@ export function AppProvider({ children }) {
       setShareActivityWithGuilds,
       readReceiptsEnabled,
       setReadReceiptsEnabled,
+      discordTrackingEnabled,
+      setDiscordTrackingEnabled,
       xbxpricesKey,
       setXbxpricesKey,
       platpricesKey,
@@ -1276,6 +1350,7 @@ export function AppProvider({ children }) {
       currency,
       shareActivityWithGuilds,
       readReceiptsEnabled,
+      discordTrackingEnabled,
       xbxpricesKey,
       platpricesKey,
       toggleThemeMode,

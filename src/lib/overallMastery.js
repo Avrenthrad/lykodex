@@ -26,6 +26,8 @@ export const TYPICAL_MAX = {
   entertainment: 750,
   collectibles: 1000,
   tabletop: 900,
+  // 100 hours of genuinely social voice chat ≈ 1000 (see computeSocialRaw)
+  social: 1000,
 };
 
 // entries: [{ card_name, quantity, foil, card: { rarity, prices } }]
@@ -40,12 +42,24 @@ export function computeTcgRaw(entries, deckCount) {
 }
 
 // entries: entertainment_entries rows, each with .status
-export function computeEntertainmentRaw(entries) {
+// discordMedia (optional): { listeningSeconds, watchingSeconds } from
+// the Discord bot's opt-in tracking (discord_activity_totals).
+// Watching counts more per hour than music, which tends to run in the
+// background for hours.
+export function computeEntertainmentRaw(entries, discordMedia) {
   const completedCount = entries.filter((e) => e.status === "completed").length;
   const inProgressCount = entries.filter(
     (e) => e.status === "watching" || e.status === "want_to_watch"
   ).length;
-  return completedCount * 15 + inProgressCount * 2;
+  const listeningHours = (discordMedia?.listeningSeconds || 0) / 3600;
+  const watchingHours = (discordMedia?.watchingSeconds || 0) / 3600;
+  return completedCount * 15 + inProgressCount * 2 + listeningHours * 1 + watchingHours * 4;
+}
+
+// Social College — voice chat time tracked by the Discord bot (opt-in).
+// Only "active" seconds count: not deafened, not AFK, not alone.
+export function computeSocialRaw(voiceActiveSeconds) {
+  return ((voiceActiveSeconds || 0) / 3600) * 10;
 }
 
 // entries: collectible_entries rows, each with .qty, .price_paid, .is_wishlist
@@ -66,7 +80,7 @@ export function computeTabletopRaw(campaigns, characterCount, armyCount) {
 
 // collegeScores: { gaming?: number (already 0-1000 normalized),
 //   tcg?: number (raw), entertainment?: number (raw),
-//   collectibles?: number (raw), tabletop?: number (raw) }
+//   collectibles?: number (raw), tabletop?: number (raw), social?: number (raw) }
 // A key is only present when that College actually has real data —
 // same "missing = not counted" rule as computeMasteryScore.
 // Returns null when every College is empty (never a fabricated 0).

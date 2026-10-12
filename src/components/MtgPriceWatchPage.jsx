@@ -172,7 +172,20 @@ export default function MtgPriceWatchPage({ onBack, userId, onGoToSearch }) {
 
           <ul className="backlog-list">
             {rows.map(({ entry, price, history, pct }) => (
-              <li key={entry.id} className="backlog-card price-watch-row" onClick={() => setDetailCard(entry.card)}>
+              <li
+                key={entry.id}
+                className="backlog-card price-watch-row"
+                onClick={() => setDetailCard(entry.card)}
+                role="button"
+                tabIndex={0}
+                aria-label={`Price history for ${entry.card.name}`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setDetailCard(entry.card);
+                  }
+                }}
+              >
                 {entry.card.imageSmall ? (
                   <img src={entry.card.imageSmall} alt="" className="backlog-card__thumb" loading="lazy" decoding="async" />
                 ) : (

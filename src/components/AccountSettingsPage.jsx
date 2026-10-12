@@ -26,7 +26,7 @@ import { faviconFor, shortStoreName } from "./price/priceUtils";
 import { COLLEGES as ALL_COLLEGES } from "../data/colleges";
 import { supabase } from "../lib/supabaseClient";
 import { fetchMyFriendCode } from "../lib/friends";
-import { checkIsLykodexDelegate } from "../lib/auth";
+import { checkIsLykodexDelegate, deleteMyAccount } from "../lib/auth";
 import { useApp } from "../hooks/useApp";
 import CollegeIcon from "./CollegeIcon";
 
@@ -100,6 +100,8 @@ export default function AccountSettingsPage({
   onShareActivityWithGuildsChange,
   readReceiptsEnabled,
   onReadReceiptsEnabledChange,
+  discordTrackingEnabled,
+  onDiscordTrackingEnabledChange,
   userId,
   onGoToFriends,
 }) {
@@ -451,6 +453,25 @@ export default function AccountSettingsPage({
             <span className="toggle-switch__thumb" />
           </span>
         </label>
+
+        <p className="settings-card__note">
+          Off by default. When on, the Lykodex Discord bot records your game playtime (Xbox,
+          PlayStation and non-Steam PC), voice chat time, and Spotify / Watching time from your
+          Discord status, and counts it toward your Mastery. Needs Discord linked and a server
+          shared with the bot. Nothing before you turn this on can be backfilled.
+        </p>
+        <label className="toggle-row">
+          <span className="toggle-row__label">Discord activity tracking</span>
+          <span className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={discordTrackingEnabled}
+              onChange={(e) => onDiscordTrackingEnabledChange(e.target.checked)}
+            />
+            <span className="toggle-switch__track" />
+            <span className="toggle-switch__thumb" />
+          </span>
+        </label>
       </section>
 
       {/* Appearance */}
@@ -685,7 +706,72 @@ export default function AccountSettingsPage({
         </section>
       )}
 
+      {!actingAsLykodex && <DeleteAccountCard />}
+
       <p className="panel__status">Changes save automatically as you type.</p>
     </div>
+  );
+}
+
+// Privacy Policy "Keeping and deleting your data". Typing DELETE is a
+// deliberate speed bump for a permanent action, not an obstacle — no
+// extra steps, emails or waiting periods beyond that.
+function DeleteAccountCard() {
+  const { handleLogout } = useApp();
+  const [confirmText, setConfirmText] = useState("");
+  const [status, setStatus] = useState("idle"); // idle | working | error
+  const [error, setError] = useState("");
+
+  async function handleDelete() {
+    setStatus("working");
+    setError("");
+    try {
+      await deleteMyAccount();
+      // Device-only settings (layout etc.) belonged to this account too.
+      try {
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith("gd-"))
+          .forEach((k) => localStorage.removeItem(k));
+      } catch {
+        // storage unavailable — nothing to clear
+      }
+      handleLogout();
+    } catch (err) {
+      setError(err.message || "Couldn't delete your account — try again.");
+      setStatus("error");
+    }
+  }
+
+  return (
+    <section className="settings-card settings-card--danger" aria-labelledby="delete-account-title">
+      <h2 id="delete-account-title" className="settings-card__title">Delete account</h2>
+      <p className="settings-card__note">
+        Permanently deletes your account, everything you've added, your uploaded images and your linked accounts.
+        This can't be undone. See the <a href="#/privacy">Privacy Policy</a> for details.
+      </p>
+      <label className="api-key-field">
+        <span>Type DELETE to confirm</span>
+        <input
+          type="text"
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
+      <button
+        type="button"
+        className="settings-danger-btn"
+        onClick={handleDelete}
+        disabled={confirmText !== "DELETE" || status === "working"}
+      >
+        {status === "working" ? "Deleting…" : "Delete my account"}
+      </button>
+      {error && (
+        <p className="panel__status panel__status--error" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }

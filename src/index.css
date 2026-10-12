@@ -155,7 +155,11 @@
   --bg-base: var(--bg);
   --text-primary: var(--text);
   --text-secondary: var(--text-muted);
-  --text-tertiary: color-mix(in srgb, var(--text-muted) 65%, transparent);
+  /* Same as secondary on purpose: the old 65%-opacity mix measured
+     2.5–3.1:1 against bg/surface in both modes, under WCAG AA's 4.5:1
+     for text. It only passes at ~92%+ opacity, which is
+     indistinguishable from --text-muted anyway. */
+  --text-tertiary: var(--text-muted);
   --accent: var(--red);
   --accent-deep: var(--red-deep);
   --accent-bright: var(--red-bright);
@@ -207,6 +211,20 @@ html[data-accent="blue"] {
   --grad-red: linear-gradient(90deg, var(--red), var(--red-deep));
   --text-on-accent: #FFFFFF;
 }
+
+/* Light-mode accents, deepened for WCAG AA. The dark-mode accents sit
+   at 1.9–3.9:1 on the light cream background, so accent-coloured text
+   and links were hard to read. These all reach 4.5:1+ on --bg and
+   --surface-raised, with white text on accent fills. Dark mode is
+   unchanged. Must stay after the accent blocks above (same
+   specificity for gold, higher for the others). */
+html[data-mode="light"] {
+  --red: #7D600F;
+  --text-on-accent: #FFFFFF;
+}
+html[data-mode="light"][data-accent="red"] { --red: #C41E33; }
+html[data-mode="light"][data-accent="purple"] { --red: #6D3FE0; }
+html[data-mode="light"][data-accent="blue"] { --red: #1D63D8; }
 
 * {
   box-sizing: border-box;
@@ -4533,49 +4551,6 @@ a.dash-drawer__community-link:hover {
   flex-direction: column;
   align-items: flex-end;
   flex-shrink: 0;
-}
-
-/* ---------- Under Construction overlay (Dashboards 2–6, still mock data) ---------- */
-
-/* Clips the strike's negative left/right so a rotated bleed doesn't
-   widen the page. The badge stays click-through with the strike. */
-.wip-overlay {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 5;
-}
-
-.wip-strike {
-  position: absolute;
-  left: -6%;
-  right: -6%;
-  top: 50%;
-  height: 2px;
-  background: var(--alpha-yellow);
-  opacity: 0.5;
-  transform: rotate(-6deg);
-  pointer-events: none;
-  z-index: 5;
-}
-
-.wip-badge {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  background: rgba(242, 194, 48, 0.12);
-  border: 1px solid var(--alpha-yellow);
-  color: var(--alpha-yellow);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 4px 10px;
-  border-radius: 6px;
-  z-index: 6;
-  pointer-events: none;
 }
 
 /* ---------- G2A search link-out chip (no price data pulled, just a link) ---------- */
@@ -11546,4 +11521,226 @@ html[data-mode="light"] .overview-tile {
     display: flex;
     flex-direction: column;
   }
+}
+
+/* ---------- Compliance: legal pages, footer, cookie notice, consent ---------- */
+
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -48px;
+  z-index: 1000;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--red);
+  color: var(--text-on-accent);
+  font: 600 14px var(--font-body);
+  cursor: pointer;
+}
+.skip-link:focus-visible {
+  top: 12px;
+}
+#main-content:focus {
+  outline: none;
+}
+
+.legal-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  color: var(--text);
+  line-height: 1.6;
+}
+.legal-page__back {
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.legal-page__back:hover {
+  color: var(--text);
+}
+.legal-page__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 24px;
+}
+.legal-page__tab {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 14px;
+}
+.legal-page__tab:hover {
+  color: var(--text);
+}
+.legal-page__tab--active {
+  border-color: var(--red);
+  color: var(--text);
+}
+.legal-page__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 36px);
+}
+.legal-page__updated {
+  margin: 4px 0 16px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.legal-page__intro {
+  font-size: 17px;
+}
+.legal-page__section {
+  margin-top: 28px;
+}
+.legal-page__heading {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 20px;
+}
+.legal-page__text {
+  margin: 0 0 10px;
+}
+.legal-page__list {
+  margin: 0;
+  padding-left: 20px;
+}
+.legal-page__list li {
+  margin-bottom: 8px;
+}
+
+.site-footer {
+  margin-top: 48px;
+  padding: 24px 16px 32px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 20px;
+  margin-bottom: 10px;
+}
+.site-footer__link {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.site-footer__link:hover {
+  color: var(--text);
+}
+.site-footer__text {
+  margin: 4px auto;
+  max-width: 720px;
+}
+.site-footer__text--fine {
+  font-size: 12px;
+}
+
+.cookie-notice {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-lg, 0 20px 44px rgba(0, 0, 0, 0.3));
+  font-size: 14px;
+}
+.cookie-notice__text {
+  margin: 0;
+  flex: 1;
+}
+.cookie-notice__text a {
+  color: var(--text);
+  text-decoration: underline;
+}
+.cookie-notice__btn {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--red);
+  color: var(--text-on-accent);
+  font: 600 14px var(--font-body);
+  cursor: pointer;
+}
+@media (max-width: 520px) {
+  .cookie-notice {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.auth-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.auth-consent input {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--red);
+}
+.auth-consent a,
+.auth-legal-note a {
+  color: var(--text);
+  text-decoration: underline;
+}
+.auth-legal-note {
+  margin: 16px 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.settings-card--danger {
+  border-color: color-mix(in srgb, var(--rose) 55%, var(--border));
+}
+.settings-card--danger a {
+  color: var(--text);
+  text-decoration: underline;
+}
+.settings-danger-btn {
+  margin-top: 12px;
+  padding: 9px 16px;
+  border: 1px solid var(--rose);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: 600 14px var(--font-body);
+  cursor: pointer;
+}
+.settings-danger-btn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--rose) 18%, transparent);
+}
+.settings-danger-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

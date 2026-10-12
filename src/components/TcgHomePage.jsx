@@ -346,17 +346,16 @@ function OnePieceSummary({ isLoggedIn, userId }) {
 // the DB tables — all untouched and still wired) but its tab is shown
 // disabled: its proxy (api/pricing.js's handleRiftbound) is blocked in
 // production (Riftcodex 403s requests from Vercel's infrastructure, see
-// that file's comment), so enabling it would be a dead end. Kept as a
-// greyed-out "coming soon" tab at the end rather than hidden; drop the
-// `disabled` flag (and give it a features/Summary pair like the others,
-// restorable from commit 6694bd4) once that proxy is fixed.
+// that file's comment), so its tab is hidden rather than shown as a
+// dead "coming soon" button. To bring it back once that proxy is fixed,
+// add a { id: "riftbound", label: "Riftbound", features, Summary } entry
+// here (the features/Summary pair is restorable from commit 6694bd4).
 const GAME_TABS = [
   { id: "pokemon", label: "Pokémon", features: POKEMON_FEATURES, Summary: PokemonSummary },
   { id: "mtg", label: "Magic: The Gathering", features: MTG_FEATURES, Summary: MtgSummary },
   { id: "onepiece", label: "One Piece", features: ONEPIECE_FEATURES, Summary: OnePieceSummary },
   { id: "fab", label: "Flesh and Blood", features: FAB_FEATURES, Summary: FabSummary },
   { id: "yugioh", label: "Yu-Gi-Oh!", features: YUGIOH_FEATURES, Summary: YugiohSummary },
-  { id: "riftbound", label: "Riftbound", disabled: true },
 ];
 
 export default function TcgHomePage({ onNavigate, isLoggedIn, userId }) {
@@ -373,8 +372,6 @@ export default function TcgHomePage({ onNavigate, isLoggedIn, userId }) {
             type="button"
             className={`quickdash-reset-btn ${game === t.id ? "quickdash-reset-btn--active" : ""}`}
             onClick={() => setGame(t.id)}
-            disabled={t.disabled}
-            title={t.disabled ? "Coming soon" : undefined}
           >
             {t.label}
           </button>

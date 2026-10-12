@@ -16,9 +16,10 @@
 //  - the range's real high/low as two dashed price lines
 //    (series.createPriceLine), axis-labelled by the library itself.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createChart, AreaSeries, LineSeries, LineStyle, LineType } from "lightweight-charts";
-import { CHART_RANGES, loadOverviewChartData, rangeToDays } from "../lib/overviewChartData";
+import { CHART_RANGES, loadOverviewChartData, rangeToDays, withLiveMasteryPoint } from "../lib/overviewChartData";
+import { useApp } from "../hooks/useApp";
 
 // Mirror the DESIGN_TOKENS values; lightweight-charts paints to a
 // canvas so it can't read the CSS custom properties directly.
@@ -327,8 +328,21 @@ function animateChartGrow(api, block, { reducedMotion = false, onStart, onEnd } 
 export default function OverviewStockChart({ userId, linkedSteamId }) {
   const [range, setRange] = useState("week");
   const [viewIndex, setViewIndex] = useState(0);
-  const [payload, setPayload] = useState(null);
+  const [fetchedPayload, setPayload] = useState(null);
   const [status, setStatus] = useState("loading");
+  // Your live Overall Mastery score, so a recompute shows on the chart
+  // straight away instead of waiting for the next daily snapshot.
+  const { overallMasteryScore } = useApp();
+  const payload = useMemo(() => {
+    if (!fetchedPayload) return null;
+    return {
+      ...fetchedPayload,
+      mastery: {
+        ...fetchedPayload.mastery,
+        you: withLiveMasteryPoint(fetchedPayload.mastery.you, overallMasteryScore),
+      },
+    };
+  }, [fetchedPayload, overallMasteryScore]);
   const [growing, setGrowing] = useState(false);
   const [scrub, setScrub] = useState(null); // { x, date, youValue } while hovering the plot
 

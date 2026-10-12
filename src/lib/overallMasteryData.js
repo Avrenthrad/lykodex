@@ -10,7 +10,7 @@ import { fetchCollection, fetchDecks, enrichCollectionEntry } from "./mtg";
 import { fetchEntertainmentEntries } from "./entertainment";
 import { fetchCollectibles } from "./collectibles";
 import { fetchCampaigns, fetchCharacters, fetchArmies } from "./tabletop";
-import { computeTcgRaw, computeEntertainmentRaw, computeCollectiblesRaw, computeTabletopRaw, computeOverallScore, accountXpFromMastery, levelFromXp } from "./overallMastery";
+import { computeTcgRaw, computeEntertainmentRaw, computeCollectiblesRaw, computeTabletopRaw, computeSocialRaw, computeOverallScore, accountXpFromMastery, levelFromXp } from "./overallMastery";
 
 async function gatherTcg(userId) {
   const [rows, decks] = await Promise.all([fetchCollection(userId), fetchDecks(userId)]);
@@ -19,10 +19,33 @@ async function gatherTcg(userId) {
   return computeTcgRaw(enriched, decks.length);
 }
 
-async function gatherEntertainment(userId) {
+// Totals recorded by the Lykodex Discord bot (opt-in tracking) — voice
+// chat, Spotify listening and "Watching" time. null when the person has
+// never had any Discord activity recorded (or the view doesn't exist
+// yet), which simply leaves those contributions out.
+async function fetchDiscordTotals(userId) {
+  const { data, error } = await supabase
+    .from("discord_activity_totals")
+    .select("voice_active_seconds, listening_seconds, watching_seconds")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function gatherEntertainment(userId, discordTotals) {
   const entries = await fetchEntertainmentEntries(userId);
-  if (entries.length === 0) return null;
-  return computeEntertainmentRaw(entries);
+  const media = {
+    listeningSeconds: Number(discordTotals?.listening_seconds) || 0,
+    watchingSeconds: Number(discordTotals?.watching_seconds) || 0,
+  };
+  if (entries.length === 0 && media.listeningSeconds + media.watchingSeconds === 0) return null;
+  return computeEntertainmentRaw(entries, media);
+}
+
+function gatherSocial(discordTotals) {
+  const seconds = Number(discordTotals?.voice_active_seconds) || 0;
+  return seconds > 0 ? computeSocialRaw(seconds) : null;
 }
 
 async function gatherCollectibles(userId) {
@@ -49,9 +72,14 @@ async function gatherTabletop(userId) {
 // key-event triggers rather than on every render, same cached-on-
 // profile pattern gd_score and mastery_score already use.
 export async function recomputeOverallMastery(userId, gamingMasteryScore) {
+  const discordTotals = await fetchDiscordTotals(userId).catch((err) => {
+    console.error("Discord activity totals fetch failed:", err);
+    return null;
+  });
+  const socialRaw = gatherSocial(discordTotals);
   const [tcgRaw, entertainmentRaw, collectiblesRaw, tabletopRaw] = await Promise.all([
     gatherTcg(userId).catch((err) => { console.error("TCG mastery data fetch failed:", err); return null; }),
-    gatherEntertainment(userId).catch((err) => { console.error("Entertainment mastery data fetch failed:", err); return null; }),
+    gatherEntertainment(userId, discordTotals).catch((err) => { console.error("Entertainment mastery data fetch failed:", err); return null; }),
     gatherCollectibles(userId).catch((err) => { console.error("Collectibles mastery data fetch failed:", err); return null; }),
     gatherTabletop(userId).catch((err) => { console.error("Tabletop mastery data fetch failed:", err); return null; }),
   ]);
@@ -62,6 +90,7 @@ export async function recomputeOverallMastery(userId, gamingMasteryScore) {
   if (entertainmentRaw !== null) collegeScores.entertainment = entertainmentRaw;
   if (collectiblesRaw !== null) collegeScores.collectibles = collectiblesRaw;
   if (tabletopRaw !== null) collegeScores.tabletop = tabletopRaw;
+  if (socialRaw !== null) collegeScores.social = socialRaw;
 
   const combined = computeOverallScore(collegeScores);
 

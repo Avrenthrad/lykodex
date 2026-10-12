@@ -36,6 +36,7 @@ import UpdateCheckMenuItem from "./UpdateCheckMenuItem";
 import DownloadDesktopMenuItem from "./DownloadDesktopMenuItem";
 import CommunityQuickLinks from "./CommunityQuickLinks";
 import { accountXpFromMastery, levelFromXp } from "../lib/overallMastery";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 // Top-level College tabs. Order matters — this is the fixed display
 // order regardless of which ones a person actually selected during
@@ -52,7 +53,8 @@ const COLLEGES = [
 ];
 
 // The 5 real Colleges the Mastery Score dropdown breaks down by —
-// same set as COLLEGES minus the "Overview" pseudo-entry.
+// same set as COLLEGES minus the "Overview" pseudo-entry. (Social, from
+// Discord voice time, is rendered separately below — it has no tab.)
 const MASTERY_COLLEGES = COLLEGES.filter((c) => c.id !== "overview");
 
 function collegeMasteryMeta(entry) {
@@ -353,6 +355,7 @@ export default function Header({
   }
 
   const showBackdrop = openMenu === "settings";
+  useEscapeKey(closeMenu, openMenu !== null);
 
   const activeCollegeId =
     currentView === "overview"
@@ -612,6 +615,23 @@ export default function Header({
                         </div>
                       );
                     })}
+                    {/* Social isn't a nav College — it only exists as
+                        voice chat time from the Discord bot (opt-in), so
+                        it's shown only once someone actually has some. */}
+                    {(() => {
+                      const meta = collegeMasteryMeta(overallMasteryBreakdown.find((b) => b.college === "social"));
+                      if (!meta) return null;
+                      return (
+                        <div className="dash-header__mastery-row">
+                          <span aria-hidden="true" style={{ width: 16, textAlign: "center", fontSize: 13 }}>🎙️</span>
+                          <span className="dash-header__mastery-row-label">Social</span>
+                          <span className="dash-header__mastery-row-stats">
+                            <span className="dash-header__mastery-row-level">Lvl {meta.level}</span>
+                            <span className="dash-header__mastery-row-xp">{meta.xp.toLocaleString()} XP</span>
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {overallMasteryBreakdown.length === 0 && (
