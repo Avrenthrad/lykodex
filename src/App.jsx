@@ -13,7 +13,7 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
 import Header from "./components/Header";
-import { getCollegeSidebarForView, getCollegeHeroForView } from "./lib/navSections";
+import { getCollegeSidebarForView, getCollegeHeroForView, tcgGameForView, rememberTcgGame } from "./lib/navSections";
 import CollegeSidebar from "./components/CollegeSidebar";
 import CollegeHeroBanner from "./components/CollegeHeroBanner";
 import { useCollegeSidebarState } from "./hooks/useCollegeSidebarState";
@@ -211,6 +211,11 @@ export default function App() {
   useEffect(() => {
     initOAuthRedirectListener();
   }, []);
+
+  useEffect(() => {
+    const game = tcgGameForView(view);
+    if (game) rememberTcgGame(game);
+  }, [view]);
 
   useEffect(() => {
     if (!customizingLayout || !gridContainerRef.current) return;
@@ -509,6 +514,7 @@ export default function App() {
               isLoggedIn={isLoggedIn}
               onSignIn={() => goTo("login", "login")}
               onCreateAccount={() => goTo("login", "signup")}
+              onViewCollection={() => goTo("mtg-collection")}
             />
           )}
 
@@ -519,6 +525,7 @@ export default function App() {
               isLoggedIn={isLoggedIn}
               onSignIn={() => goTo("login", "login")}
               onCreateAccount={() => goTo("login", "signup")}
+              onViewCollection={() => goTo("fab-collection")}
             />
           )}
 
@@ -570,6 +577,7 @@ export default function App() {
               isLoggedIn={isLoggedIn}
               onSignIn={() => goTo("login", "login")}
               onCreateAccount={() => goTo("login", "signup")}
+              onViewCollection={() => goTo("pokemon-collection")}
             />
           )}
 
@@ -621,6 +629,7 @@ export default function App() {
               isLoggedIn={isLoggedIn}
               onSignIn={() => goTo("login", "login")}
               onCreateAccount={() => goTo("login", "signup")}
+              onViewCollection={() => goTo("yugioh-collection")}
             />
           )}
 
@@ -660,6 +669,7 @@ export default function App() {
               isLoggedIn={isLoggedIn}
               onSignIn={() => goTo("login", "login")}
               onCreateAccount={() => goTo("login", "signup")}
+              onViewCollection={() => goTo("onepiece-collection")}
             />
           )}
 
@@ -699,6 +709,7 @@ export default function App() {
               isLoggedIn={isLoggedIn}
               onSignIn={() => goTo("login", "login")}
               onCreateAccount={() => goTo("login", "signup")}
+              onViewCollection={() => goTo("riftbound-collection")}
             />
           )}
 

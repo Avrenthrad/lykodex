@@ -7,6 +7,7 @@
 import { supabase } from "./supabaseClient";
 import { getFabCardById, getFabSet, getFabSetCoverArt, isFabCardIllegal } from "./fab";
 import { logActivityForUser } from "./guilds";
+import { notifyCollectionChanged } from "./collectionEvents";
 
 // ---------- Collection ----------
 
@@ -34,6 +35,7 @@ export async function addToCollection(userId, card, { quantity = 1, printingUniq
     source,
   });
   if (error) throw error;
+  notifyCollectionChanged("fab");
   logActivityForUser(userId, "fab_card_added", { title: card.name });
 }
 
@@ -56,6 +58,7 @@ export async function addManyToCollection(userId, rows) {
     }))
   );
   if (error) throw error;
+  notifyCollectionChanged("fab");
 }
 
 export async function updateCollectionEntry(entryId, patch) {

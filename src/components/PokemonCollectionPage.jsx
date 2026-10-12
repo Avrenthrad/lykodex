@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchCollection, enrichCollectionEntry, updateCollectionEntry, removeFromCollection, fetchDecks } from "../lib/pokemonCollection";
+import { useCollectionEntries } from "../hooks/useCollectionEntries";
 import { currentPokemonPrice } from "../lib/pokemon";
 import PokemonBindersPage from "./PokemonBindersPage";
 
@@ -63,28 +64,8 @@ export default function PokemonCollectionPage({ onBack, userId, onGoToSearch, on
 }
 
 function CardsTab({ userId, onGoToSearch, onGoToScan }) {
-  const [entries, setEntries] = useState([]);
-  const [status, setStatus] = useState("loading");
+  const { entries, setEntries, status } = useCollectionEntries("pokemon", userId, fetchCollection, enrichCollectionEntry);
   const [sortBy, setSortBy] = useState("recent");
-
-  useEffect(() => {
-    if (!userId) return;
-    loadCollection();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
-  async function loadCollection() {
-    setStatus("loading");
-    try {
-      const rows = await fetchCollection(userId);
-      const enriched = await Promise.all(rows.map(enrichCollectionEntry));
-      setEntries(enriched);
-      setStatus("ready");
-    } catch (err) {
-      console.error("Failed to load Pokémon collection:", err);
-      setStatus("error");
-    }
-  }
 
   async function handleQuantityChange(entry, newQuantity) {
     const qty = Math.max(0, Number(newQuantity) || 0);

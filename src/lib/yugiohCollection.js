@@ -7,6 +7,7 @@
 import { supabase } from "./supabaseClient";
 import { getYugiohCardById } from "./yugioh";
 import { logActivityForUser } from "./guilds";
+import { notifyCollectionChanged } from "./collectionEvents";
 
 // ---------- Collection ----------
 
@@ -32,6 +33,7 @@ export async function addToCollection(userId, card, { quantity = 1, condition = 
     source,
   });
   if (error) throw error;
+  notifyCollectionChanged("yugioh");
   logActivityForUser(userId, "yugioh_card_added", { title: card.name });
 }
 

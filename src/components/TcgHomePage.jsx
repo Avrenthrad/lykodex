@@ -18,7 +18,9 @@
 // what MTG's dedicated Price Watch page is for, with real recorded
 // history behind it.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { rememberedTcgGame, rememberTcgGame } from "../lib/navSections";
+import { useCollectionEntries } from "../hooks/useCollectionEntries";
 import { fetchCollection, enrichCollectionEntry } from "../lib/mtg";
 import { fetchCollection as fetchFabCollection, enrichCollectionEntry as enrichFabCollectionEntry } from "../lib/fabCollection";
 import { fetchCollection as fetchPokemonCollection, enrichCollectionEntry as enrichPokemonCollectionEntry } from "../lib/pokemonCollection";
@@ -68,23 +70,12 @@ const RARITY_ORDER = ["mythic", "rare", "uncommon", "common"];
 const RARITY_LABELS = { mythic: "Mythic", rare: "Rare", uncommon: "Uncommon", common: "Common" };
 
 function MtgSummary({ isLoggedIn, userId }) {
-  const [entries, setEntries] = useState([]);
-  const [status, setStatus] = useState("idle");
-
-  useEffect(() => {
-    if (!isLoggedIn || !userId) return;
-    setStatus("loading");
-    fetchCollection(userId)
-      .then((rows) => Promise.all(rows.map(enrichCollectionEntry)))
-      .then((enriched) => {
-        setEntries(enriched);
-        setStatus("ready");
-      })
-      .catch((err) => {
-        console.error("MTG collection summary fetch failed:", err);
-        setStatus("error");
-      });
-  }, [isLoggedIn, userId]);
+  const { entries, status } = useCollectionEntries(
+    "mtg",
+    isLoggedIn ? userId : null,
+    fetchCollection,
+    enrichCollectionEntry,
+  );
 
   const totalCards = entries.reduce((sum, e) => sum + e.quantity, 0);
   const rarityCounts = entries.reduce((acc, e) => {
@@ -125,23 +116,12 @@ function MtgSummary({ isLoggedIn, userId }) {
 }
 
 function FabSummary({ isLoggedIn, userId }) {
-  const [entries, setEntries] = useState([]);
-  const [status, setStatus] = useState("idle");
-
-  useEffect(() => {
-    if (!isLoggedIn || !userId) return;
-    setStatus("loading");
-    fetchFabCollection(userId)
-      .then((rows) => Promise.all(rows.map(enrichFabCollectionEntry)))
-      .then((enriched) => {
-        setEntries(enriched);
-        setStatus("ready");
-      })
-      .catch((err) => {
-        console.error("Flesh and Blood collection summary fetch failed:", err);
-        setStatus("error");
-      });
-  }, [isLoggedIn, userId]);
+  const { entries, status } = useCollectionEntries(
+    "fab",
+    isLoggedIn ? userId : null,
+    fetchFabCollection,
+    enrichFabCollectionEntry,
+  );
 
   const totalCards = entries.reduce((sum, e) => sum + e.quantity, 0);
 
@@ -165,23 +145,12 @@ function FabSummary({ isLoggedIn, userId }) {
 }
 
 function PokemonSummary({ isLoggedIn, userId }) {
-  const [entries, setEntries] = useState([]);
-  const [status, setStatus] = useState("idle");
-
-  useEffect(() => {
-    if (!isLoggedIn || !userId) return;
-    setStatus("loading");
-    fetchPokemonCollection(userId)
-      .then((rows) => Promise.all(rows.map(enrichPokemonCollectionEntry)))
-      .then((enriched) => {
-        setEntries(enriched);
-        setStatus("ready");
-      })
-      .catch((err) => {
-        console.error("Pokémon collection summary fetch failed:", err);
-        setStatus("error");
-      });
-  }, [isLoggedIn, userId]);
+  const { entries, status } = useCollectionEntries(
+    "pokemon",
+    isLoggedIn ? userId : null,
+    fetchPokemonCollection,
+    enrichPokemonCollectionEntry,
+  );
 
   const totalCards = entries.reduce((sum, e) => sum + e.quantity, 0);
   const totalValue = entries.reduce((sum, e) => {
@@ -225,23 +194,12 @@ function PokemonSummary({ isLoggedIn, userId }) {
 }
 
 function YugiohSummary({ isLoggedIn, userId }) {
-  const [entries, setEntries] = useState([]);
-  const [status, setStatus] = useState("idle");
-
-  useEffect(() => {
-    if (!isLoggedIn || !userId) return;
-    setStatus("loading");
-    fetchYugiohCollection(userId)
-      .then((rows) => Promise.all(rows.map(enrichYugiohCollectionEntry)))
-      .then((enriched) => {
-        setEntries(enriched);
-        setStatus("ready");
-      })
-      .catch((err) => {
-        console.error("Yu-Gi-Oh! collection summary fetch failed:", err);
-        setStatus("error");
-      });
-  }, [isLoggedIn, userId]);
+  const { entries, status } = useCollectionEntries(
+    "yugioh",
+    isLoggedIn ? userId : null,
+    fetchYugiohCollection,
+    enrichYugiohCollectionEntry,
+  );
 
   const totalCards = entries.reduce((sum, e) => sum + e.quantity, 0);
   const totalValue = entries.reduce((sum, e) => {
@@ -284,23 +242,12 @@ function YugiohSummary({ isLoggedIn, userId }) {
 }
 
 function OnePieceSummary({ isLoggedIn, userId }) {
-  const [entries, setEntries] = useState([]);
-  const [status, setStatus] = useState("idle");
-
-  useEffect(() => {
-    if (!isLoggedIn || !userId) return;
-    setStatus("loading");
-    fetchOnePieceCollection(userId)
-      .then((rows) => Promise.all(rows.map(enrichOnePieceCollectionEntry)))
-      .then((enriched) => {
-        setEntries(enriched);
-        setStatus("ready");
-      })
-      .catch((err) => {
-        console.error("One Piece collection summary fetch failed:", err);
-        setStatus("error");
-      });
-  }, [isLoggedIn, userId]);
+  const { entries, status } = useCollectionEntries(
+    "onepiece",
+    isLoggedIn ? userId : null,
+    fetchOnePieceCollection,
+    enrichOnePieceCollectionEntry,
+  );
 
   const totalCards = entries.reduce((sum, e) => sum + e.quantity, 0);
   const totalValue = entries.reduce((sum, e) => {
@@ -359,7 +306,14 @@ const GAME_TABS = [
 ];
 
 export default function TcgHomePage({ onNavigate, isLoggedIn, userId }) {
-  const [game, setGame] = useState(GAME_TABS[0].id);
+  const [game, setGame] = useState(
+    () => rememberedTcgGame(GAME_TABS.map((t) => t.id)) || GAME_TABS[0].id,
+  );
+
+  function selectGame(next) {
+    setGame(next);
+    rememberTcgGame(next);
+  }
   const activeTab = GAME_TABS.find((t) => t.id === game) || GAME_TABS[0];
   const ActiveSummary = activeTab.Summary;
 
@@ -371,7 +325,7 @@ export default function TcgHomePage({ onNavigate, isLoggedIn, userId }) {
             key={t.id}
             type="button"
             className={`quickdash-reset-btn ${game === t.id ? "quickdash-reset-btn--active" : ""}`}
-            onClick={() => setGame(t.id)}
+            onClick={() => selectGame(t.id)}
           >
             {t.label}
           </button>

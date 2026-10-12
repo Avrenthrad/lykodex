@@ -6,14 +6,18 @@
 import { useEffect, useRef, useState } from "react";
 import { searchRiftboundCards, getRiftboundCardAutocomplete } from "../lib/riftbound";
 import { addToCollection } from "../lib/riftboundCollection";
+import CollectionAddNotice from "./CollectionAddNotice";
 
-export default function RiftboundSearchPage({ onBack, userId, isLoggedIn, onSignIn, onCreateAccount }) {
+const ADD_ERROR = "Couldn't add that card to your collection. Try again.";
+
+export default function RiftboundSearchPage({ onBack, userId, isLoggedIn, onSignIn, onCreateAccount, onViewCollection }) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState("idle"); // idle | loading | ready | error
   const [addedIds, setAddedIds] = useState(new Set());
   const [addingIds, setAddingIds] = useState(new Set());
+  const [addMessage, setAddMessage] = useState(null);
   const suggestionRequestId = useRef(0);
 
   useEffect(() => {
@@ -38,6 +42,7 @@ export default function RiftboundSearchPage({ onBack, userId, isLoggedIn, onSign
     if (!q.trim()) return;
     suggestionRequestId.current += 1;
     setSuggestions([]);
+    setAddMessage(null);
     setStatus("loading");
     try {
       const cards = await searchRiftboundCards(q.trim());
@@ -52,11 +57,14 @@ export default function RiftboundSearchPage({ onBack, userId, isLoggedIn, onSign
   async function handleAdd(card) {
     if (addingIds.has(card.id) || addedIds.has(card.id)) return;
     setAddingIds((prev) => new Set(prev).add(card.id));
+    setAddMessage(null);
     try {
       await addToCollection(userId, card);
       setAddedIds((prev) => new Set(prev).add(card.id));
+      setAddMessage({ type: "ok", name: card.name });
     } catch (err) {
       console.error("Failed to add card to collection:", err);
+      setAddMessage({ type: "error", text: ADD_ERROR });
     } finally {
       setAddingIds((prev) => {
         const next = new Set(prev);
@@ -103,6 +111,8 @@ export default function RiftboundSearchPage({ onBack, userId, isLoggedIn, onSign
           </ul>
         )}
       </form>
+
+      <CollectionAddNotice message={addMessage} onViewCollection={onViewCollection} />
 
       {status === "loading" && <p className="panel__status">Searching…</p>}
       {/* Known issue, not intermittent: Riftcodex currently blocks

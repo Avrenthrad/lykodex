@@ -53,6 +53,60 @@ export const TCG_VIEWS = [
 
 export const TCG_SIDEBAR_VIEWS = [...TCG_VIEWS];
 
+// TCG home remounts on every visit and its tab state starts on Pokémon.
+// Back from a Magic search used to land on that Pokémon tab, whose
+// collection fetch never includes the card that was just inserted — so
+// the add looked like it went nowhere, including after a reload.
+const TCG_GAME_BY_VIEW = {
+  "mtg-search": "mtg",
+  "mtg-collection": "mtg",
+  "mtg-decks": "mtg",
+  "mtg-price-watch": "mtg",
+  "mtg-scan": "mtg",
+  "mtg-import": "mtg",
+  "fab-search": "fab",
+  "fab-collection": "fab",
+  "fab-decks": "fab",
+  "fab-scan": "fab",
+  "pokemon-search": "pokemon",
+  "pokemon-collection": "pokemon",
+  "pokemon-decks": "pokemon",
+  "pokemon-scan": "pokemon",
+  "yugioh-search": "yugioh",
+  "yugioh-collection": "yugioh",
+  "yugioh-decks": "yugioh",
+  "onepiece-search": "onepiece",
+  "onepiece-collection": "onepiece",
+  "onepiece-decks": "onepiece",
+  "riftbound-search": "riftbound",
+  "riftbound-collection": "riftbound",
+  "riftbound-decks": "riftbound",
+};
+
+export const TCG_GAME_STORAGE_KEY = "lykodex-tcg-game";
+
+export function tcgGameForView(view) {
+  return TCG_GAME_BY_VIEW[view] || null;
+}
+
+export function rememberTcgGame(game) {
+  try {
+    sessionStorage.setItem(TCG_GAME_STORAGE_KEY, game);
+  } catch {
+    // sessionStorage can throw in private mode — the tab just won't stick.
+  }
+}
+
+export function rememberedTcgGame(validIds) {
+  try {
+    const saved = sessionStorage.getItem(TCG_GAME_STORAGE_KEY);
+    if (saved && validIds.includes(saved)) return saved;
+  } catch {
+    // Same private-mode case as rememberTcgGame.
+  }
+  return null;
+}
+
 // Library (Entertainment) College — sidebar shell; page labels TBD.
 export const ENTERTAINMENT_SIDEBAR_ITEMS = [
   { id: "college-entertainment", label: "Home" },

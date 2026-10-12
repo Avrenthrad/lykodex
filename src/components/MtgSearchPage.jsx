@@ -4,14 +4,18 @@
 import { useEffect, useRef, useState } from "react";
 import { searchCards, getCardAutocomplete } from "../lib/scryfall";
 import { addToCollection } from "../lib/mtg";
+import CollectionAddNotice from "./CollectionAddNotice";
 
-export default function MtgSearchPage({ onBack, userId, isLoggedIn, onSignIn, onCreateAccount }) {
+const ADD_ERROR = "Couldn't add that card to your collection. Try again.";
+
+export default function MtgSearchPage({ onBack, userId, isLoggedIn, onSignIn, onCreateAccount, onViewCollection }) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState("idle"); // idle | loading | ready | error
   const [addedIds, setAddedIds] = useState(new Set());
   const [addingIds, setAddingIds] = useState(new Set());
+  const [addMessage, setAddMessage] = useState(null);
   // Guards a real bug: the debounced autocomplete fetch below can
   // still be in flight when the user submits a real search (e.g.
   // click Search right after typing, before the 250ms debounce
@@ -44,6 +48,7 @@ export default function MtgSearchPage({ onBack, userId, isLoggedIn, onSignIn, on
     if (!q.trim()) return;
     suggestionRequestId.current += 1; // invalidate any in-flight autocomplete
     setSuggestions([]);
+    setAddMessage(null);
     setStatus("loading");
     try {
       const { cards } = await searchCards(q.trim());
@@ -58,11 +63,14 @@ export default function MtgSearchPage({ onBack, userId, isLoggedIn, onSignIn, on
   async function handleAdd(card) {
     if (addingIds.has(card.id) || addedIds.has(card.id)) return;
     setAddingIds((prev) => new Set(prev).add(card.id));
+    setAddMessage(null);
     try {
       await addToCollection(userId, card);
       setAddedIds((prev) => new Set(prev).add(card.id));
+      setAddMessage({ type: "ok", name: card.name });
     } catch (err) {
       console.error("Failed to add card to collection:", err);
+      setAddMessage({ type: "error", text: ADD_ERROR });
     } finally {
       setAddingIds((prev) => {
         const next = new Set(prev);
@@ -109,6 +117,8 @@ export default function MtgSearchPage({ onBack, userId, isLoggedIn, onSignIn, on
           </ul>
         )}
       </form>
+
+      <CollectionAddNotice message={addMessage} onViewCollection={onViewCollection} />
 
       {status === "loading" && <p className="panel__status">Searching…</p>}
       {status === "error" && <p className="panel__status panel__status--error">Couldn't search right now.</p>}

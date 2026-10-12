@@ -4,14 +4,18 @@
 import { useEffect, useRef, useState } from "react";
 import { searchPokemonCards, getPokemonCardAutocomplete, currentPokemonPrice, nameQuery } from "../lib/pokemon";
 import { addToCollection } from "../lib/pokemonCollection";
+import CollectionAddNotice from "./CollectionAddNotice";
 
-export default function PokemonSearchPage({ onBack, userId, isLoggedIn, onSignIn, onCreateAccount }) {
+const ADD_ERROR = "Couldn't add that card to your collection. Try again.";
+
+export default function PokemonSearchPage({ onBack, userId, isLoggedIn, onSignIn, onCreateAccount, onViewCollection }) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState("idle"); // idle | loading | ready | error
   const [addedIds, setAddedIds] = useState(new Set());
   const [addingIds, setAddingIds] = useState(new Set());
+  const [addMessage, setAddMessage] = useState(null);
   // Same real bug this app already hit and fixed in MtgSearchPage/
   // FabSearchPage: a debounced autocomplete fetch still in flight when
   // the user submits a real search can resolve late and re-populate
@@ -40,6 +44,7 @@ export default function PokemonSearchPage({ onBack, userId, isLoggedIn, onSignIn
     if (!q.trim()) return;
     suggestionRequestId.current += 1;
     setSuggestions([]);
+    setAddMessage(null);
     setStatus("loading");
     try {
       const { cards } = await searchPokemonCards(nameQuery(q.trim()));
@@ -54,11 +59,14 @@ export default function PokemonSearchPage({ onBack, userId, isLoggedIn, onSignIn
   async function handleAdd(card) {
     if (addingIds.has(card.id) || addedIds.has(card.id)) return;
     setAddingIds((prev) => new Set(prev).add(card.id));
+    setAddMessage(null);
     try {
       await addToCollection(userId, card);
       setAddedIds((prev) => new Set(prev).add(card.id));
+      setAddMessage({ type: "ok", name: card.name });
     } catch (err) {
       console.error("Failed to add card to collection:", err);
+      setAddMessage({ type: "error", text: ADD_ERROR });
     } finally {
       setAddingIds((prev) => {
         const next = new Set(prev);
@@ -105,6 +113,8 @@ export default function PokemonSearchPage({ onBack, userId, isLoggedIn, onSignIn
           </ul>
         )}
       </form>
+
+      <CollectionAddNotice message={addMessage} onViewCollection={onViewCollection} />
 
       {status === "loading" && <p className="panel__status">Searching…</p>}
       {status === "error" && <p className="panel__status panel__status--error">Couldn't search right now — Pokémon TCG data is occasionally unavailable, try again in a moment.</p>}

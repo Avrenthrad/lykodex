@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchCollection, enrichCollectionEntry, updateCollectionEntry, removeFromCollection, fetchDecks } from "../lib/riftboundCollection";
+import { useCollectionEntries } from "../hooks/useCollectionEntries";
 
 const TABS = [
   { id: "cards", label: "Cards" },
@@ -42,28 +43,8 @@ export default function RiftboundCollectionPage({ onBack, userId, onGoToSearch, 
 }
 
 function CardsTab({ userId, onGoToSearch }) {
-  const [entries, setEntries] = useState([]);
-  const [status, setStatus] = useState("loading");
+  const { entries, setEntries, status } = useCollectionEntries("riftbound", userId, fetchCollection, enrichCollectionEntry);
   const [sortBy, setSortBy] = useState("recent");
-
-  useEffect(() => {
-    if (!userId) return;
-    loadCollection();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
-  async function loadCollection() {
-    setStatus("loading");
-    try {
-      const rows = await fetchCollection(userId);
-      const enriched = await Promise.all(rows.map(enrichCollectionEntry));
-      setEntries(enriched);
-      setStatus("ready");
-    } catch (err) {
-      console.error("Failed to load Riftbound collection:", err);
-      setStatus("error");
-    }
-  }
 
   async function handleQuantityChange(entry, newQuantity) {
     const qty = Math.max(0, Number(newQuantity) || 0);
