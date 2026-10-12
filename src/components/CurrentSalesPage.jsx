@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchTopDeals } from "../lib/cheapshark";
+import SteamArt from "./SteamArt";
 import { getExchangeRates, formatPrice } from "../lib/currency";
 import { saleEvents, describeEventStatus } from "../data/saleEvents";
 
@@ -65,8 +66,14 @@ export default function CurrentSalesPage({ onBack, currency }) {
             {deals.map((deal, i) => (
               <li key={`${deal.title}-${i}`} className="wishlist-card">
                 <div className="wishlist-card__main">
-                  {deal.thumb ? (
-                    <img src={deal.thumb} alt="" className="wishlist-card__thumb" loading="lazy" decoding="async" />
+                  {deal.steamAppID || deal.thumb ? (
+                    <SteamArt
+                      appid={deal.steamAppID}
+                      headerImage={deal.thumb}
+                      className="wishlist-card__thumb"
+                      alt=""
+                      loading="lazy"
+                    />
                   ) : (
                     <div className="wishlist-card__thumb wishlist-card__thumb--placeholder" />
                   )}

@@ -17,6 +17,7 @@
 
 import { useEffect, useState } from "react";
 import { searchSteamGames } from "../lib/steam";
+import SteamArt from "./SteamArt";
 import { searchRawgGamesAndDlc } from "../lib/rawg";
 import { logActivityForUser } from "../lib/guilds";
 import {
@@ -233,7 +234,14 @@ export default function BacklogPage({ onBack, userId, linkedSteamId }) {
           </button>
           {surpriseItem && (
             <div className="surprise-me__result">
-              {surpriseItem.thumb && <img src={surpriseItem.thumb} alt="" decoding="async" />}
+              {(surpriseItem.steam_appid || surpriseItem.thumb) && (
+                <SteamArt
+                  appid={surpriseItem.steam_appid}
+                  headerImage={surpriseItem.thumb}
+                  className="surprise-me__art"
+                  alt=""
+                />
+              )}
               <span className="surprise-me__title">{surpriseItem.title}</span>
               <button
                 type="button"
@@ -346,8 +354,14 @@ export default function BacklogPage({ onBack, userId, linkedSteamId }) {
         <ul className="backlog-list">
           {sortedItems.map((item) => (
             <li key={item.id} className="backlog-card">
-              {item.thumb ? (
-                <img src={item.thumb} alt="" className="backlog-card__thumb" loading="lazy" decoding="async" />
+              {item.steam_appid || item.thumb ? (
+                <SteamArt
+                  appid={item.steam_appid}
+                  headerImage={item.thumb}
+                  className="backlog-card__thumb"
+                  alt=""
+                  loading="lazy"
+                />
               ) : (
                 <div className="backlog-card__thumb backlog-card__thumb--placeholder" />
               )}

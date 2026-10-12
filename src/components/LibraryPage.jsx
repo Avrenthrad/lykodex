@@ -29,7 +29,7 @@
 // as equivalent to Steam's complete server-side playtime record.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchOwnedGames, steamHeaderArt } from "../lib/steam";
+import { fetchOwnedGames } from "../lib/steam";
 import { fetchBacklog, addToBacklog } from "../lib/backlog";
 import { fetchGameLibrary, mergeLibraryByTitle } from "../lib/gameLibrary";
 import { fetchGameLibraryTags, toggleGameLibraryTag } from "../lib/gameLibraryTags";
@@ -458,7 +458,6 @@ export default function LibraryPage({
                     key={game.title}
                     game={game}
                     formatPlaytime={formatPlaytime}
-                    steamHeaderArt={steamHeaderArt}
                   />
                 ))}
               </ul>

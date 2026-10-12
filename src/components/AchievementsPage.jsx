@@ -30,8 +30,8 @@ import {
   fetchAchievementSchema,
   fetchAchievements,
   fetchGlobalAchievementPercentages,
-  steamHeaderArt,
 } from "../lib/steam";
+import SteamArt from "./SteamArt";
 import {
   fetchAllPlatformAchievements,
   addPlatformAchievement,
@@ -420,7 +420,7 @@ function SteamAchievements({ linkedSteamId, userId }) {
             return (
               <div key={g.appid} className="achievement-group">
                 <h3 className="achievement-group__title">
-                  <img src={steamHeaderArt(g.appid)} alt="" className="achievement-group__thumb" loading="lazy" decoding="async" />
+                  <SteamArt appid={g.appid} className="achievement-group__thumb" alt="" loading="lazy" />
                   {g.name}
                   <PlatformTag platform="steam" />
                   {rows && rows.length > 0 && (

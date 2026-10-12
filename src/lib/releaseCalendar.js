@@ -1,7 +1,8 @@
 // Shared release-calendar helpers — used by the full page and the
 // dashboard/Market preview cards. Real RAWG + Steam wishlist data only.
 
-import { steamHeaderArt } from "./steam";
+// Steam art is resolved at render time (see SteamArt). The legacy
+// header.jpg URL 404s for newer apps, so it isn't baked in here.
 
 export const RELEASE_WINDOW_DAYS = 120;
 export const RELEASE_MAX_ITEMS = 48;
@@ -82,7 +83,7 @@ export function mergeReleases(steamUpcoming, rawgReleases, wishlistTitles) {
       appid: game.appid,
       name: game.name,
       releaseDate: game.releaseDate,
-      imageUrl: steamHeaderArt(game.appid),
+      imageUrl: null,
       isSteamWishlist: true,
       isLykodexWishlist: wishlistTitles.has(key),
       platforms: ["Steam"],

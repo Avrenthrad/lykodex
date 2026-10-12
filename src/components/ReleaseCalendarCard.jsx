@@ -1,6 +1,7 @@
 // Dashboard + Market preview — next releases at a glance, links to full calendar.
 
 import { useMemo } from "react";
+import { ReleaseArt } from "./ReleaseCalendar";
 import { useReleaseCalendar } from "../hooks/useReleaseCalendar";
 import {
   RELEASE_WINDOW_DAYS,
@@ -71,11 +72,7 @@ export default function ReleaseCalendarCard({ wishlist, linkedSteamId, onOpenCal
 
               return (
                 <li key={entry.id} className="release-cal-preview__row">
-                  <div
-                    className="release-cal-preview__art"
-                    style={entry.imageUrl ? { backgroundImage: `url(${entry.imageUrl})` } : undefined}
-                    aria-hidden="true"
-                  />
+                  <ReleaseArt entry={entry} className="release-cal-preview__art" />
                   <div className="release-cal-preview__body">
                     <span className="release-cal-preview__name" title={entry.name}>{entry.name}</span>
                     <div className="release-cal-preview__meta">

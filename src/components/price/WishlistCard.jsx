@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SteamArt from "../SteamArt";
 import { formatPrice } from "../../lib/currency";
 import WishlistToggle from "../WishlistToggle";
 import hltbLogo from "../../assets/hltb-logo.png";
@@ -75,8 +76,14 @@ export default function WishlistCard({
   return (
     <li className="wishlist-card">
       <div className="wishlist-card__thumb-wrap">
-        {deal.thumb ? (
-          <img src={deal.thumb} alt="" className="wishlist-card__thumb" loading="lazy" decoding="async" />
+        {deal.steamAppID || deal.thumb ? (
+          <SteamArt
+            appid={deal.steamAppID}
+            headerImage={deal.thumb}
+            className="wishlist-card__thumb"
+            alt=""
+            loading="lazy"
+          />
         ) : (
           <div className="wishlist-card__thumb wishlist-card__thumb--placeholder" />
         )}

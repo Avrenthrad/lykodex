@@ -3,6 +3,7 @@ import { formatPrice } from "../../lib/currency";
 import { searchRawgGamesAndDlc } from "../../lib/rawg";
 import { fetchGameDeal } from "../../lib/gameData";
 import WishlistToggle from "../WishlistToggle";
+import SteamArt from "../SteamArt";
 import { StoreChip } from "./StoreChip";
 import { buildStoreRow, getCheapestInfo } from "./priceUtils";
 
@@ -208,8 +209,14 @@ export default function PriceSearch({
             return (
               <li key={rawg.id} className="search-result-card">
                 <div className="search-result-card__row">
-                  {result.thumb ? (
-                    <img src={result.thumb} alt="" className="search-result-card__thumb" loading="lazy" decoding="async" />
+                  {result.steamAppID || result.thumb ? (
+                    <SteamArt
+                      appid={result.steamAppID}
+                      headerImage={result.thumb}
+                      className="search-result-card__thumb"
+                      alt=""
+                      loading="lazy"
+                    />
                   ) : (
                     <div className="search-result-card__thumb search-result-card__thumb--placeholder" />
                   )}
