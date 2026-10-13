@@ -7,6 +7,7 @@
 import { supabase } from "./supabaseClient";
 import { getPokemonCardById, getPokemonSet, getPokemonSetCoverArt } from "./pokemon";
 import { logActivityForUser } from "./guilds";
+import { notifyCollectionChanged } from "./collectionEvents";
 
 // ---------- Collection ----------
 
@@ -32,6 +33,7 @@ export async function addToCollection(userId, card, { quantity = 1, finish = nul
     source,
   });
   if (error) throw error;
+  notifyCollectionChanged("pokemon");
   logActivityForUser(userId, "pokemon_card_added", { title: card.name });
 }
 
@@ -49,6 +51,7 @@ export async function addManyToCollection(userId, rows) {
     }))
   );
   if (error) throw error;
+  notifyCollectionChanged("pokemon");
 }
 
 export async function updateCollectionEntry(entryId, patch) {

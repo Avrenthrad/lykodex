@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchCollection, enrichCollectionEntry, updateCollectionEntry, removeFromCollection, fetchDecks } from "../lib/fabCollection";
+import { useCollectionEntries } from "../hooks/useCollectionEntries";
 import FabBindersPage from "./FabBindersPage";
 
 const TABS = [
@@ -58,28 +59,8 @@ export default function FabCollectionPage({ onBack, userId, onGoToSearch, onGoTo
 }
 
 function CardsTab({ userId, onGoToSearch, onGoToScan, onGoToImport }) {
-  const [entries, setEntries] = useState([]);
-  const [status, setStatus] = useState("loading");
+  const { entries, setEntries, status } = useCollectionEntries("fab", userId, fetchCollection, enrichCollectionEntry);
   const [sortBy, setSortBy] = useState("recent");
-
-  useEffect(() => {
-    if (!userId) return;
-    loadCollection();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
-
-  async function loadCollection() {
-    setStatus("loading");
-    try {
-      const rows = await fetchCollection(userId);
-      const enriched = await Promise.all(rows.map(enrichCollectionEntry));
-      setEntries(enriched);
-      setStatus("ready");
-    } catch (err) {
-      console.error("Failed to load Flesh and Blood collection:", err);
-      setStatus("error");
-    }
-  }
 
   async function handleQuantityChange(entry, newQuantity) {
     const qty = Math.max(0, Number(newQuantity) || 0);

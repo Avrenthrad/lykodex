@@ -4,14 +4,18 @@
 import { useEffect, useRef, useState } from "react";
 import { searchOnePieceCards, getOnePieceCardAutocomplete, currentOnePiecePrice } from "../lib/onepiece";
 import { addToCollection } from "../lib/onepieceCollection";
+import CollectionAddNotice from "./CollectionAddNotice";
 
-export default function OnePieceSearchPage({ onBack, userId, isLoggedIn, onSignIn, onCreateAccount }) {
+const ADD_ERROR = "Couldn't add that card to your collection. Try again.";
+
+export default function OnePieceSearchPage({ onBack, userId, isLoggedIn, onSignIn, onCreateAccount, onViewCollection }) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState("idle"); // idle | loading | ready | error
   const [addedIds, setAddedIds] = useState(new Set());
   const [addingIds, setAddingIds] = useState(new Set());
+  const [addMessage, setAddMessage] = useState(null);
   const suggestionRequestId = useRef(0);
 
   useEffect(() => {
@@ -36,6 +40,7 @@ export default function OnePieceSearchPage({ onBack, userId, isLoggedIn, onSignI
     if (!q.trim()) return;
     suggestionRequestId.current += 1;
     setSuggestions([]);
+    setAddMessage(null);
     setStatus("loading");
     try {
       const cards = await searchOnePieceCards(q.trim());
@@ -50,11 +55,14 @@ export default function OnePieceSearchPage({ onBack, userId, isLoggedIn, onSignI
   async function handleAdd(card) {
     if (addingIds.has(card.id) || addedIds.has(card.id)) return;
     setAddingIds((prev) => new Set(prev).add(card.id));
+    setAddMessage(null);
     try {
       await addToCollection(userId, card);
       setAddedIds((prev) => new Set(prev).add(card.id));
+      setAddMessage({ type: "ok", name: card.name });
     } catch (err) {
       console.error("Failed to add card to collection:", err);
+      setAddMessage({ type: "error", text: ADD_ERROR });
     } finally {
       setAddingIds((prev) => {
         const next = new Set(prev);
@@ -101,6 +109,8 @@ export default function OnePieceSearchPage({ onBack, userId, isLoggedIn, onSignI
           </ul>
         )}
       </form>
+
+      <CollectionAddNotice message={addMessage} onViewCollection={onViewCollection} />
 
       {status === "loading" && <p className="panel__status">Searching…</p>}
       {status === "error" && <p className="panel__status panel__status--error">Couldn't search right now — optcgapi.com is occasionally unavailable, try again in a moment.</p>}

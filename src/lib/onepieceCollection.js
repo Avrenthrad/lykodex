@@ -7,6 +7,7 @@
 import { supabase } from "./supabaseClient";
 import { getOnePieceCardById } from "./onepiece";
 import { logActivityForUser } from "./guilds";
+import { notifyCollectionChanged } from "./collectionEvents";
 
 // ---------- Collection ----------
 
@@ -32,6 +33,7 @@ export async function addToCollection(userId, card, { quantity = 1, condition = 
     source,
   });
   if (error) throw error;
+  notifyCollectionChanged("onepiece");
   logActivityForUser(userId, "onepiece_card_added", { title: card.name });
 }
 

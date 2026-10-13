@@ -4,6 +4,7 @@
 import { supabase } from "./supabaseClient";
 import { getCardById, getSet, getSetCoverArt } from "./scryfall";
 import { logActivityForUser } from "./guilds";
+import { notifyCollectionChanged } from "./collectionEvents";
 
 // ---------- Collection ----------
 
@@ -29,6 +30,7 @@ export async function addToCollection(userId, card, { quantity = 1, foil = false
     source,
   });
   if (error) throw error;
+  notifyCollectionChanged("mtg");
   logActivityForUser(userId, "mtg_card_added", { title: card.name });
 }
 
@@ -50,6 +52,7 @@ export async function addManyToCollection(userId, rows) {
     }))
   );
   if (error) throw error;
+  notifyCollectionChanged("mtg");
 }
 
 export async function updateCollectionEntry(entryId, patch) {

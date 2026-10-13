@@ -6,18 +6,22 @@
 import { useEffect, useRef, useState } from "react";
 import { searchFabCards, getFabCardAutocomplete } from "../lib/fab";
 import { addToCollection } from "../lib/fabCollection";
+import CollectionAddNotice from "./CollectionAddNotice";
+
+const ADD_ERROR = "Couldn't add that card to your collection. Try again.";
 
 function firstPrintingImage(card) {
   return card.printings.find((p) => p.imageUrl)?.imageUrl || null;
 }
 
-export default function FabSearchPage({ onBack, userId, isLoggedIn, onSignIn, onCreateAccount }) {
+export default function FabSearchPage({ onBack, userId, isLoggedIn, onSignIn, onCreateAccount, onViewCollection }) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState("idle"); // idle | loading | ready | error
   const [addedIds, setAddedIds] = useState(new Set());
   const [addingIds, setAddingIds] = useState(new Set());
+  const [addMessage, setAddMessage] = useState(null);
   // Guards against a real bug: the debounced autocomplete fetch below
   // can still be in flight when the user submits a real search (e.g.
   // click Search right after typing, before the 250ms debounce fires).
@@ -50,6 +54,7 @@ export default function FabSearchPage({ onBack, userId, isLoggedIn, onSignIn, on
     if (!q.trim()) return;
     suggestionRequestId.current += 1; // invalidate any in-flight autocomplete
     setSuggestions([]);
+    setAddMessage(null);
     setStatus("loading");
     try {
       const { cards } = await searchFabCards({ name: q.trim() });
@@ -64,6 +69,7 @@ export default function FabSearchPage({ onBack, userId, isLoggedIn, onSignIn, on
   async function handleAdd(card) {
     if (addingIds.has(card.id) || addedIds.has(card.id)) return;
     setAddingIds((prev) => new Set(prev).add(card.id));
+    setAddMessage(null);
     const printing = card.printings[0];
     try {
       await addToCollection(userId, card, {
@@ -73,8 +79,10 @@ export default function FabSearchPage({ onBack, userId, isLoggedIn, onSignIn, on
         foiling: printing?.foiling || null,
       });
       setAddedIds((prev) => new Set(prev).add(card.id));
+      setAddMessage({ type: "ok", name: card.name });
     } catch (err) {
       console.error("Failed to add card to collection:", err);
+      setAddMessage({ type: "error", text: ADD_ERROR });
     } finally {
       setAddingIds((prev) => {
         const next = new Set(prev);
@@ -121,6 +129,8 @@ export default function FabSearchPage({ onBack, userId, isLoggedIn, onSignIn, on
           </ul>
         )}
       </form>
+
+      <CollectionAddNotice message={addMessage} onViewCollection={onViewCollection} />
 
       {status === "loading" && <p className="panel__status">Searching…</p>}
       {status === "error" && <p className="panel__status panel__status--error">Couldn't search right now.</p>}

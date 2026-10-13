@@ -3165,6 +3165,24 @@ a.dash-drawer__community-link:hover {
   color: var(--rose);
 }
 
+.collection-add-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.collection-add-notice__link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* ---------- Live player count (Price Comparison) ---------- */
 
 .deal-row__players {
