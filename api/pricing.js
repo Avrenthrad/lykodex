@@ -48,6 +48,7 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { computeXboxScore, computePsScore, computeSteamScore, computeMasteryScore, accountXpFromMastery, levelFromXp } from "../src/lib/gameMastery.js";
 import { computeOverallScore } from "../src/lib/overallMastery.js";
+import { scoreChanged } from "../src/lib/masterySnapshot.js";
 
 const XBXPRICES_BASE = "https://xbxprices.com/api/v2";
 const CHEAPSHARK_ALLOWED_ENDPOINTS = ["games", "deals", "stores"];
@@ -1672,11 +1673,20 @@ async function handleCrunchyroll(req, searchParams, res) {
 // that happens, this runs once for everyone at the one fixed UTC time
 // Hobby allows, same as the original version of this cron did.
 const GAMES_TO_SCAN = 15; // same bound as gameMasteryData.js's client-side gatherSteamAchievements
+// A hung Steam call used to hold the whole cron until Vercel killed it
+// at maxDuration — no row was written, so mastery_computed_at stayed
+// weeks old. Bound each request so a dead endpoint falls back instead.
+const STEAM_FETCH_MS = 12_000;
+const PLATFORM_FETCH_MS = 15_000;
+
+function steamFetch(url) {
+  return fetch(url, { signal: AbortSignal.timeout(STEAM_FETCH_MS) });
+}
 
 async function steamFetchOwnedGames(steamId) {
   const apiKey = process.env.STEAM_API_KEY;
   const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${encodeURIComponent(steamId)}&format=json&include_appinfo=1`;
-  const res = await fetch(url);
+  const res = await steamFetch(url);
   if (!res.ok) throw new Error(`Steam owned-games request failed (${res.status})`);
   const data = await res.json();
   return data.response?.games || [];
@@ -1685,7 +1695,7 @@ async function steamFetchOwnedGames(steamId) {
 async function steamFetchAchievements(steamId, appId) {
   const apiKey = process.env.STEAM_API_KEY;
   const url = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid=${encodeURIComponent(appId)}&key=${apiKey}&steamid=${encodeURIComponent(steamId)}`;
-  const res = await fetch(url);
+  const res = await steamFetch(url);
   if (!res.ok) throw new Error(`Steam achievements request failed (${res.status})`);
   const data = await res.json();
   return data.playerstats?.achievements || [];
@@ -1693,10 +1703,26 @@ async function steamFetchAchievements(steamId, appId) {
 
 async function steamFetchGlobalAchievementPercentages(appId) {
   const url = `https://api.steampowered.com/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/?gameid=${encodeURIComponent(appId)}`;
-  const res = await fetch(url);
+  const res = await steamFetch(url);
   if (!res.ok) throw new Error(`Steam global achievement percentages request failed (${res.status})`);
   const data = await res.json();
   return data.achievementpercentages?.achievements || [];
+}
+
+function withDeadline(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }
 
 // Real Steam Mastery contribution, server-side — same three genuine
@@ -1711,6 +1737,7 @@ async function getLiveSteamMasteryRaw(steamId) {
     .sort((a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0))
     .slice(0, GAMES_TO_SCAN);
 
+  let failedGames = 0;
   const perGame = await Promise.all(
     topGames.map(async (game) => {
       try {
@@ -1724,32 +1751,42 @@ async function getLiveSteamMasteryRaw(steamId) {
           return { unlockPercent: percentEntry ? Number(percentEntry.percent) : null };
         });
       } catch {
+        failedGames += 1;
         return []; // no achievements on this game, or a private/edge-case response — skip it
       }
     })
   );
 
+  // Every request failed (timeouts, Steam down). An empty scan is not
+  // a real score of 0 — throwing keeps the last computed contribution.
+  if (topGames.length > 0 && failedGames === topGames.length) {
+    throw new Error("Steam achievement scan failed for every game");
+  }
+
   const achievements = perGame.flat();
   return { raw: computeSteamScore(achievements), gamesScanned: topGames.length, achievementsCounted: achievements.length };
 }
 
-// Recomputes Gaming Mastery (Steam + Xbox + PlayStation) fresh,
-// server-side, for the hourly midnight-local-time cron below.
-// Unlike the old once-daily-for-everyone version of this cron, Steam
-// is now genuinely re-fetched here too when linked — falling back to
-// whatever was last computed only on a fetch failure, not skipped
-// outright, since this now runs at each person's own local midnight
-// rather than one shared fixed time.
+// Recomputes Gaming Mastery (Steam + Xbox + PlayStation) fresh.
+// Steam is re-fetched when linked and only falls back to the last
+// computed contribution when that fetch fails — a failed scan must
+// not wipe a real score down to 0.
 async function recomputeMasteryForUserServerSide(adminClient, userId, linkedSteamId) {
   const { data: profile } = await adminClient.from("profiles").select("mastery_breakdown").eq("id", userId).maybeSingle();
   const { data: inputs } = await adminClient.from("mastery_inputs").select("*").eq("user_id", userId).maybeSingle();
 
   const rawScores = {};
   const sources = {};
+  let steamFallback = false;
 
-  const existingSteam = Array.isArray(profile?.mastery_breakdown)
-    ? profile.mastery_breakdown.find((e) => e.platform === "steam")
-    : null;
+  const breakdownOf = (platform) => (
+    Array.isArray(profile?.mastery_breakdown)
+      ? profile.mastery_breakdown.find((e) => e.platform === platform)
+      : null
+  );
+  const existingSteam = breakdownOf("steam");
+  const existingXbox = breakdownOf("xbox");
+  const existingPlaystation = breakdownOf("playstation");
 
   if (linkedSteamId) {
     try {
@@ -1758,6 +1795,7 @@ async function recomputeMasteryForUserServerSide(adminClient, userId, linkedStea
       sources.steam = { source: "live_steam_api", asOf: new Date().toISOString(), gamesScanned, achievementsCounted };
     } catch (err) {
       console.error(`pricing (mastery-cron): Steam fetch failed for user ${userId}`, err);
+      steamFallback = true;
       if (existingSteam) {
         rawScores.steam = existingSteam.raw;
         sources.steam = { source: existingSteam.source, asOf: existingSteam.asOf, gamesScanned: existingSteam.gamesScanned, achievementsCounted: existingSteam.achievementsCounted };
@@ -1769,7 +1807,7 @@ async function recomputeMasteryForUserServerSide(adminClient, userId, linkedStea
   }
 
   try {
-    const result = await getLiveXboxGamerscore(adminClient, userId);
+    const result = await withDeadline(getLiveXboxGamerscore(adminClient, userId), PLATFORM_FETCH_MS, "Xbox");
     if (result !== "not_linked" && result !== "expired") {
       rawScores.xbox = computeXboxScore(result.gamerscore);
       sources.xbox = { source: "live_xbox_api", asOf: new Date().toISOString(), gamerscore: result.gamerscore, gamertag: result.gamertag };
@@ -1779,10 +1817,14 @@ async function recomputeMasteryForUserServerSide(adminClient, userId, linkedStea
     }
   } catch (err) {
     console.error(`pricing (mastery-cron): Xbox fetch failed for user ${userId}`, err);
+    if (existingXbox) {
+      rawScores.xbox = existingXbox.raw;
+      sources.xbox = { source: existingXbox.source, asOf: existingXbox.asOf, gamerscore: existingXbox.gamerscore, gamertag: existingXbox.gamertag };
+    }
   }
 
   try {
-    const result = await getLiveTrophies(adminClient, userId);
+    const result = await withDeadline(getLiveTrophies(adminClient, userId), PLATFORM_FETCH_MS, "PSN");
     if (result !== "not_linked" && result !== "expired") {
       rawScores.playstation = computePsScore(result.trophies);
       sources.playstation = { source: "live_psn_api", asOf: new Date().toISOString() };
@@ -1792,6 +1834,10 @@ async function recomputeMasteryForUserServerSide(adminClient, userId, linkedStea
     }
   } catch (err) {
     console.error(`pricing (mastery-cron): PSN fetch failed for user ${userId}`, err);
+    if (existingPlaystation) {
+      rawScores.playstation = existingPlaystation.raw;
+      sources.playstation = { source: existingPlaystation.source, asOf: existingPlaystation.asOf };
+    }
   }
 
   const combined = computeMasteryScore(rawScores);
@@ -1809,7 +1855,7 @@ async function recomputeMasteryForUserServerSide(adminClient, userId, linkedStea
     mastery_computed_at: new Date().toISOString(),
   }).eq("id", userId);
   if (error) throw error;
-  return combined.masteryScore;
+  return { score: combined.masteryScore, steamFallback };
 }
 
 // Recombines Overall Mastery (all 5 Colleges) using the just-refreshed
@@ -1828,8 +1874,13 @@ async function recomputeMasteryForUserServerSide(adminClient, userId, linkedStea
 // (see overallMastery.js's computeOverallScore) as the source of
 // truth for those 4, rather than re-deriving them.
 async function recomputeOverallMasteryServerSide(adminClient, userId, freshGamingScore) {
-  const { data: profile } = await adminClient.from("profiles").select("overall_mastery_breakdown").eq("id", userId).maybeSingle();
+  const { data: profile } = await adminClient
+    .from("profiles")
+    .select("overall_mastery_breakdown, overall_mastery_score")
+    .eq("id", userId)
+    .maybeSingle();
   const existingBreakdown = Array.isArray(profile?.overall_mastery_breakdown) ? profile.overall_mastery_breakdown : [];
+  const previous = profile?.overall_mastery_score;
 
   const collegeScores = {};
   for (const entry of existingBreakdown) {
@@ -1838,7 +1889,7 @@ async function recomputeOverallMasteryServerSide(adminClient, userId, freshGamin
   if (freshGamingScore != null) collegeScores.gaming = freshGamingScore;
 
   const combined = computeOverallScore(collegeScores);
-  if (!combined) return false;
+  if (!combined) return { updated: false, score: null, previous };
 
   const accountXp = accountXpFromMastery(combined.overallScore);
   const { level } = levelFromXp(accountXp);
@@ -1851,7 +1902,66 @@ async function recomputeOverallMasteryServerSide(adminClient, userId, freshGamin
     overall_mastery_computed_at: new Date().toISOString(),
   }).eq("id", userId);
   if (error) throw error;
+  return { updated: true, score: combined.overallScore, previous };
+}
+
+// The morning snapshot copies whatever is already stored, which is
+// still the pre-refresh score when it shares the cron's minute. Write
+// a history row only when this run actually moved the number, and
+// skip if the change trigger just did.
+async function recordChangedMasterySnapshot(adminClient, userId, previous, score) {
+  if (!scoreChanged(previous, score)) return false;
+  const { data: latest } = await adminClient
+    .from("mastery_score_history")
+    .select("overall_mastery_score, recorded_at")
+    .eq("user_id", userId)
+    .order("recorded_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latest && !scoreChanged(latest.overall_mastery_score, score)) {
+    const age = Date.now() - new Date(latest.recorded_at).getTime();
+    if (age >= 0 && age < 2 * 60 * 1000) return false;
+  }
+  const { error } = await adminClient.from("mastery_score_history").insert({
+    user_id: userId,
+    overall_mastery_score: score,
+  });
+  if (error) throw error;
   return true;
+}
+
+async function mapPool(items, limit, fn) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const i = cursor;
+      cursor += 1;
+      try {
+        results[i] = { status: "fulfilled", value: await fn(items[i]) };
+      } catch (reason) {
+        results[i] = { status: "rejected", reason };
+      }
+    }
+  }
+  const workers = Math.min(limit, items.length);
+  if (workers > 0) await Promise.all(Array.from({ length: workers }, () => worker()));
+  return results;
+}
+
+async function writeRefreshRun(adminClient, row) {
+  const { data, error } = await adminClient.from("mastery_refresh_runs").insert(row).select("id").single();
+  if (error) {
+    console.error("pricing (mastery-cron): could not write refresh log", error.message);
+    return null;
+  }
+  return data.id;
+}
+
+async function finishRefreshRun(adminClient, runId, row) {
+  if (!runId) return;
+  const { error } = await adminClient.from("mastery_refresh_runs").update(row).eq("id", runId);
+  if (error) console.error("pricing (mastery-cron): could not finish refresh log", error.message);
 }
 
 async function handleMasteryCron(req, res) {
@@ -1861,6 +1971,7 @@ async function handleMasteryCron(req, res) {
   // unauthenticated public trigger of a job that writes to every
   // user's profile.
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    console.error(`pricing (mastery-cron): refused (${cronSecret ? "bearer mismatch" : "CRON_SECRET is not set"})`);
     return res.status(401).json({ error: "Unauthorized" });
   }
 
@@ -1886,33 +1997,79 @@ async function handleMasteryCron(req, res) {
     ...steamByUserId.keys(),
   ])];
 
-  // Concurrent, not sequential — confirmed live as the real cause of a
-  // silent per-user failure: with users processed one at a time (each
-  // needing several sequential external API round-trips — Steam, then
-  // Xbox, then PSN), a second user pushed the function past Vercel's
-  // default duration limit (no maxDuration was set at all before this
-  // fix). A timeout just kills the function outright — no exception,
-  // no entry in `failed`, the DB write for that user simply never
-  // happens — which is exactly what was found: a friend's Xbox/PSN
-  // tokens hadn't refreshed in 4 days even though the tokens
-  // themselves were still completely valid when tested directly.
-  const results = { total: userIds.length, gamingUpdated: 0, overallUpdated: 0, noData: 0, failed: 0 };
-  const outcomes = await Promise.allSettled(userIds.map(async (userId) => {
-    const freshGamingScore = await recomputeMasteryForUserServerSide(adminClient, userId, steamByUserId.get(userId));
-    const overallUpdated = await recomputeOverallMasteryServerSide(adminClient, userId, freshGamingScore);
-    return { freshGamingScore, overallUpdated };
-  }));
+  // Two at a time, each platform call already deadline-bounded.
+  // Promise.all of every user still died at maxDuration when Steam
+  // hung: the isolate was killed before any profile update, so
+  // mastery_computed_at never moved and the 04:00 snapshot kept
+  // copying the same score. A run row is written first so a kill
+  // leaves status "running" with no finished_at.
+  const runId = await writeRefreshRun(adminClient, {
+    source: "vercel-cron",
+    status: "running",
+    users_total: userIds.length,
+  });
 
-  for (let i = 0; i < outcomes.length; i++) {
-    const outcome = outcomes[i];
-    if (outcome.status === "rejected") {
-      console.error(`pricing (mastery-cron): failed for user ${userIds[i]}`, outcome.reason);
-      results.failed += 1;
-      continue;
+  const results = {
+    total: userIds.length,
+    gamingUpdated: 0,
+    overallUpdated: 0,
+    historyWritten: 0,
+    steamFallbacks: 0,
+    noData: 0,
+    failed: 0,
+  };
+
+  try {
+    const outcomes = await mapPool(userIds, 2, async (userId) => {
+      const gaming = await recomputeMasteryForUserServerSide(adminClient, userId, steamByUserId.get(userId));
+      const overall = await recomputeOverallMasteryServerSide(adminClient, userId, gaming?.score ?? null);
+      let historyWritten = false;
+      if (overall.updated) {
+        historyWritten = await recordChangedMasterySnapshot(adminClient, userId, overall.previous, overall.score);
+      }
+      return { gaming, overall, historyWritten };
+    });
+
+    for (let i = 0; i < outcomes.length; i++) {
+      const outcome = outcomes[i];
+      if (!outcome || outcome.status === "rejected") {
+        console.error(`pricing (mastery-cron): failed for user ${userIds[i]}`, outcome?.reason);
+        results.failed += 1;
+        continue;
+      }
+      if (outcome.value.gaming?.score != null) results.gamingUpdated += 1;
+      else results.noData += 1;
+      if (outcome.value.gaming?.steamFallback) results.steamFallbacks += 1;
+      if (outcome.value.overall.updated) results.overallUpdated += 1;
+      if (outcome.value.historyWritten) results.historyWritten += 1;
     }
-    if (outcome.value.freshGamingScore != null) results.gamingUpdated += 1;
-    else results.noData += 1;
-    if (outcome.value.overallUpdated) results.overallUpdated += 1;
+
+    await finishRefreshRun(adminClient, runId, {
+      status: "ok",
+      finished_at: new Date().toISOString(),
+      users_total: results.total,
+      gaming_updated: results.gamingUpdated,
+      overall_updated: results.overallUpdated,
+      history_written: results.historyWritten,
+      no_data: results.noData,
+      failed: results.failed,
+      steam_fallbacks: results.steamFallbacks,
+    });
+  } catch (err) {
+    console.error("pricing (mastery-cron): run failed", err);
+    await finishRefreshRun(adminClient, runId, {
+      status: "error",
+      finished_at: new Date().toISOString(),
+      users_total: results.total,
+      gaming_updated: results.gamingUpdated,
+      overall_updated: results.overallUpdated,
+      history_written: results.historyWritten,
+      no_data: results.noData,
+      failed: results.failed,
+      steam_fallbacks: results.steamFallbacks,
+      error: String(err?.message || err).slice(0, 500),
+    });
+    return res.status(500).json({ error: "Mastery refresh failed" });
   }
 
   return res.status(200).json(results);

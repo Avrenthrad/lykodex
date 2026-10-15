@@ -19,6 +19,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createChart, AreaSeries, LineSeries, LineStyle, LineType } from "lightweight-charts";
 import { CHART_RANGES, loadOverviewChartData, rangeToDays, withLiveMasteryPoint } from "../lib/overviewChartData";
+import { describeMasteryRefresh } from "../lib/masterySnapshot";
 import { useApp } from "../hooks/useApp";
 
 // Mirror the DESIGN_TOKENS values; lightweight-charts paints to a
@@ -332,7 +333,7 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
   const [status, setStatus] = useState("loading");
   // Your live Overall Mastery score, so a recompute shows on the chart
   // straight away instead of waiting for the next daily snapshot.
-  const { overallMasteryScore } = useApp();
+  const { overallMasteryScore, overallMasteryComputedAt } = useApp();
   const payload = useMemo(() => {
     if (!fetchedPayload) return null;
     return {
@@ -354,6 +355,10 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
 
   const view = VIEWS[viewIndex];
   const sinceDays = rangeToDays(range);
+  const includeHours = view.id === "hours";
+  const animateNextRef = useRef(true);
+  const hasPayloadRef = useRef(false);
+  const loadKeyRef = useRef("");
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -367,17 +372,52 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
 
   useEffect(() => {
     if (!userId) return;
-    setStatus("loading");
-    loadOverviewChartData({ userId, linkedSteamId, sinceDays })
-      .then((data) => {
-        setPayload(data);
+    let cancelled = false;
+    let lastFetch = Date.now();
+
+    async function load({ quiet, withHours }) {
+      if (!quiet) setStatus((current) => (current === "ready" ? current : "loading"));
+      try {
+        const data = await loadOverviewChartData({
+          userId,
+          linkedSteamId,
+          sinceDays,
+          includeHours: withHours,
+        });
+        if (cancelled) return;
+        if (quiet) animateNextRef.current = false;
+        setPayload((prev) => ({
+          ...data,
+          hours: withHours || !quiet ? data.hours : (prev?.hours || data.hours),
+          refreshJob: data.refreshJob ?? prev?.refreshJob ?? null,
+        }));
+        hasPayloadRef.current = true;
         setStatus("ready");
-      })
-      .catch((err) => {
+        lastFetch = Date.now();
+      } catch (err) {
         console.error("Overview chart data failed:", err);
-        setStatus("error");
-      });
-  }, [userId, linkedSteamId, sinceDays]);
+        if (!cancelled && !quiet) setStatus("error");
+      }
+    }
+
+    const loadKey = `${userId}|${linkedSteamId ?? ""}|${sinceDays}`;
+    const quiet = hasPayloadRef.current && loadKeyRef.current === loadKey;
+    loadKeyRef.current = loadKey;
+    load({ quiet, withHours: includeHours });
+
+    function refreshIfVisible() {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetch < 60000) return;
+      load({ quiet: true, withHours: false });
+    }
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    window.addEventListener("focus", refreshIfVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener("focus", refreshIfVisible);
+    };
+  }, [userId, linkedSteamId, sinceDays, includeHours]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -453,6 +493,19 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
     if (!hasChartData(activeView, payload)) return;
 
     setScrub(null);
+    const animate = animateNextRef.current;
+    animateNextRef.current = true;
+    if (!animate) {
+      const peers = block.peers || [];
+      const samePeers = apiRef.current.seriesYou
+        && apiRef.current.peerMeta.length === peers.length
+        && peers.every((peer, i) => apiRef.current.peerMeta[i]?.label === peer.label && apiRef.current.peerMeta[i]?.kind === peer.kind);
+      if (!samePeers) {
+        ensureSeriesStructure(apiRef.current, block, activeView.id === "hours");
+      }
+      applyChartData(apiRef.current, block);
+      return;
+    }
     animateChartGrow(
       apiRef.current,
       { ...block, isHours: activeView.id === "hours" },
@@ -485,6 +538,10 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
     delta != null && rangeStartYou ? (delta / Math.abs(rangeStartYou)) * 100 : null;
   const deltaDir = delta == null ? null : delta >= 0 ? "up" : "down";
 
+  const refresh = describeMasteryRefresh({
+    job: payload?.refreshJob,
+    personalComputedAt: overallMasteryComputedAt,
+  });
   const friendLineCount = block?.peers?.filter((p) => p.kind === "friend").length ?? 0;
   const guildLineCount = block?.peers?.filter((p) => p.kind === "guild").length ?? 0;
   const showChart = status === "ready" && payload && hasChartData(view, payload);
@@ -497,6 +554,9 @@ export default function OverviewStockChart({ userId, linkedSteamId }) {
           <div className="stock-style-chart__titles">
             <span className="stock-style-chart__title">{view.title}</span>
             <span className="stock-style-chart__subtitle">{view.subtitle}</span>
+            <span className={`overview-stock-chart__refresh${refresh.stale ? " overview-stock-chart__refresh--stale" : ""}`}>
+              {refresh.text}
+            </span>
           </div>
 
           {showChart && shownYou != null && (

@@ -9093,6 +9093,17 @@ html[data-mode="light"] .overview-tile {
   font-size: 12px;
 }
 
+.overview-stock-chart__refresh {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.overview-stock-chart__refresh--stale {
+  color: var(--rose);
+}
+
 .overview-stock-chart__plot-stage {
   position: relative;
   flex: 1 1 auto;
