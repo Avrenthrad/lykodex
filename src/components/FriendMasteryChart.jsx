@@ -49,41 +49,64 @@ export default function FriendMasteryChart({ userId }) {
 
   useEffect(() => {
     if (!userId) return;
-    setStatus("loading");
-    fetchFriends(userId)
-      .then(async (friends) => {
-        const friendIds = friends.map((f) => f.friend_id);
-        const rows = await fetchFriendsMasteryHistory(friendIds);
+    let cancelled = false;
+    let lastFetch = Date.now();
 
-        const byUser = new Map();
-        for (const row of rows) {
-          if (!byUser.has(row.user_id)) byUser.set(row.user_id, []);
-          byUser.get(row.user_id).push(row);
-        }
+    function applyRows(friends, rows) {
+      const byUser = new Map();
+      for (const row of rows) {
+        if (!byUser.has(row.user_id)) byUser.set(row.user_id, []);
+        byUser.get(row.user_id).push(row);
+      }
 
-        const built = friends
-          .filter((f) => byUser.has(f.friend_id))
-          .map((f) => {
-            // Collapse same-second duplicates — lightweight-charts
-            // requires strictly-increasing time values per point (see
-            // PriceHistoryChart.jsx for the same handling).
-            const bySecond = new Map();
-            for (const r of byUser.get(f.friend_id)) {
-              const time = Math.floor(new Date(r.recorded_at).getTime() / 1000);
-              bySecond.set(time, Number(r.overall_mastery_score));
-            }
-            const points = [...bySecond.entries()].sort(([a], [b]) => a - b).map(([time, value]) => ({ time, value }));
-            return { friendId: f.friend_id, profile: f.profile, points };
-          })
-          .filter((s) => s.points.length > 0);
+      return friends
+        .filter((f) => byUser.has(f.friend_id))
+        .map((f) => {
+          // Collapse same-second duplicates — lightweight-charts
+          // requires strictly-increasing time values per point (see
+          // PriceHistoryChart.jsx for the same handling).
+          const bySecond = new Map();
+          for (const r of byUser.get(f.friend_id)) {
+            const time = Math.floor(new Date(r.recorded_at).getTime() / 1000);
+            bySecond.set(time, Number(r.overall_mastery_score));
+          }
+          const points = [...bySecond.entries()].sort(([a], [b]) => a - b).map(([time, value]) => ({ time, value }));
+          return { friendId: f.friend_id, profile: f.profile, points };
+        })
+        .filter((s) => s.points.length > 0);
+    }
 
-        setSeries(built);
-        setStatus("ready");
-      })
-      .catch((err) => {
-        console.error("Failed to load friends' Mastery Score history:", err);
-        setStatus("error");
-      });
+    function load({ quiet }) {
+      if (!quiet) setStatus("loading");
+      fetchFriends(userId)
+        .then(async (friends) => {
+          const friendIds = friends.map((f) => f.friend_id);
+          const rows = await fetchFriendsMasteryHistory(friendIds);
+          if (cancelled) return;
+          setSeries(applyRows(friends, rows));
+          setStatus("ready");
+          lastFetch = Date.now();
+        })
+        .catch((err) => {
+          console.error("Failed to load friends' Mastery Score history:", err);
+          if (!cancelled && !quiet) setStatus("error");
+        });
+    }
+
+    load({ quiet: false });
+
+    function refreshIfVisible() {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetch < 60000) return;
+      load({ quiet: true });
+    }
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    window.addEventListener("focus", refreshIfVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.removeEventListener("focus", refreshIfVisible);
+    };
   }, [userId]);
 
   // Chart lifecycle — created once on mount (this container div is

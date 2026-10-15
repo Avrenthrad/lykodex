@@ -3,6 +3,9 @@
 // rtime_last_played when Steam provides it; otherwise an honest note).
 
 import { supabase } from "./supabaseClient";
+import { withLiveMasteryPoint } from "./masterySnapshot.js";
+
+export { withLiveMasteryPoint };
 import { fetchFriends, fetchFriendsSteamIds, fetchFriendsMasteryHistory } from "./friends";
 import { fetchGuildmateIds, fetchGuildmatesMasteryHistory } from "./guilds";
 import { getPublicProfiles } from "./publicProfiles";
@@ -90,17 +93,6 @@ function gamesToDayMap(games, sinceUnix) {
   return map;
 }
 
-// History rows are daily snapshots, so a score recomputed since the
-// last snapshot wouldn't show up. Append the live score as a "now"
-// point — the same thing the friends/guild history RPCs already do for
-// peers (see schema.sql). Skipped for a 0 score, matching those RPCs.
-export function withLiveMasteryPoint(points, liveScore, nowSeconds = Math.floor(Date.now() / 1000)) {
-  const value = Number(liveScore);
-  if (!Number.isFinite(value) || value <= 0) return points;
-  const earlier = points.filter((p) => p.time < nowSeconds);
-  return [...earlier, { time: nowSeconds, value: Math.round(value * 10) / 10 }];
-}
-
 export async function fetchSelfMasteryHistory(userId, sinceDays) {
   const since = new Date(Date.now() - sinceDays * 86400000).toISOString();
   const { data, error } = await supabase
@@ -113,7 +105,20 @@ export async function fetchSelfMasteryHistory(userId, sinceDays) {
   return data || [];
 }
 
-export async function loadOverviewChartData({ userId, linkedSteamId, sinceDays }) {
+// The status RPC lands with the mastery refresh migration. Until that
+// SQL is applied, the chart still works — it just has no job timestamp.
+export async function fetchMasteryRefreshStatus() {
+  const { data, error } = await supabase.rpc("get_mastery_refresh_status");
+  if (error) {
+    const missing = /get_mastery_refresh_status|PGRST202|schema cache/i.test(error.message || "");
+    if (!missing) console.warn("Mastery refresh status unavailable:", error.message);
+    return null;
+  }
+  if (Array.isArray(data)) return data[0] || null;
+  return data || null;
+}
+
+export async function loadOverviewChartData({ userId, linkedSteamId, sinceDays, includeHours = false }) {
   const friends = await fetchFriends(userId);
   const friendIds = friends.map((f) => f.friend_id);
   const friendProfileById = Object.fromEntries(friends.map((f) => [f.friend_id, f.profile]));
@@ -121,14 +126,15 @@ export async function loadOverviewChartData({ userId, linkedSteamId, sinceDays }
 
   const guildmateIds = await fetchGuildmateIds(userId, { excludeIds: friendIds });
 
-  const [selfMasteryRows, friendMasteryRows, guildMasteryRows, steamLinks] = await Promise.all([
+  const [selfMasteryRows, friendMasteryRows, guildMasteryRows, steamLinks, refreshJob] = await Promise.all([
     fetchSelfMasteryHistory(userId, sinceDays),
     fetchFriendsMasteryHistory(friendIds, sinceDays),
     fetchGuildmatesMasteryHistory(guildmateIds, sinceDays).catch((err) => {
       console.warn("Guild mastery history unavailable:", err);
       return [];
     }),
-    fetchFriendsSteamIds(friendIds),
+    includeHours ? fetchFriendsSteamIds(friendIds) : Promise.resolve([]),
+    fetchMasteryRefreshStatus(),
   ]);
 
   const guildProfiles = guildmateIds.length
@@ -146,7 +152,9 @@ export async function loadOverviewChartData({ userId, linkedSteamId, sinceDays }
   let hoursPeers = [];
   let hoursNote = null;
 
-  if (linkedSteamId) {
+  // Active hours needs a Steam library fetch per person. The default
+  // Mastery view never plots that, so don't pay for it until it's on screen.
+  if (includeHours && linkedSteamId) {
     const selfGames = await fetchOwnedGames(linkedSteamId).catch(() => []);
     hoursYou = steamHoursByDay(selfGames, sinceUnix);
     if (hoursYou.length === 0) {
@@ -157,7 +165,7 @@ export async function loadOverviewChartData({ userId, linkedSteamId, sinceDays }
     }
   }
 
-  if (steamLinks.length > 0) {
+  if (includeHours && steamLinks.length > 0) {
     const friendGames = await Promise.all(
       steamLinks.map((l) => fetchOwnedGames(l.linked_steam_id).catch(() => [])),
     );
@@ -176,5 +184,6 @@ export async function loadOverviewChartData({ userId, linkedSteamId, sinceDays }
     hours: { you: hoursYou, peers: hoursPeers, note: hoursNote },
     friendCount: friends.length,
     guildmateCount: guildmateIds.length,
+    refreshJob,
   };
 }

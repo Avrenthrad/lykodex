@@ -2435,10 +2435,13 @@ create policy "Users can read their own mastery history"
 
 -- Friend-scoped history for charts (see friends.js). Unioned with
 -- each friend's LIVE overall_mastery_score (as a synthetic "now" row)
--- so a same-day recompute (e.g. clicking "Recompute Gaming Mastery",
--- or the daily Xbox/PSN cron) shows up immediately on the chart
--- instead of waiting for the next 4am UTC snapshot-mastery-scores-
--- daily pg_cron run (see mastery_score_history's own comment above) —
+-- so a same-day recompute shows up immediately on the chart. The
+-- daily snapshot job (snapshot-mastery-scores-daily) runs at 05:00 UTC,
+-- after the 04:00 Vercel recompute — see
+-- supabase/migrations/20261015120000_mastery_refresh_log_and_snapshot.sql.
+-- A score that actually changes is also inserted by
+-- profiles_record_overall_mastery_history, so the chart is not stuck
+-- with the pre-refresh copy until the next morning.
 -- confirmed live: a friend's chart didn't reflect their same-day
 -- recompute at all before this, since the history table itself is
 -- only ever written once a day.
@@ -2516,6 +2519,82 @@ as $$
     )
   order by recorded_at asc;
 $$;
+
+-- Run log for the Vercel mastery cron, plus a history row whenever
+-- overall_mastery_score actually changes. The SQL to apply (not yet
+-- run on production) is
+-- supabase/migrations/20261015120000_mastery_refresh_log_and_snapshot.sql
+-- — that file also moves snapshot-mastery-scores-daily to 05:00 UTC.
+-- No client policies on the log: service_role writes it,
+-- get_mastery_refresh_status is the only read.
+create table if not exists public.mastery_refresh_runs (
+  id bigint generated always as identity primary key,
+  source text not null default 'vercel-cron',
+  status text not null,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  users_total integer,
+  gaming_updated integer,
+  overall_updated integer,
+  history_written integer,
+  no_data integer,
+  failed integer,
+  steam_fallbacks integer,
+  error text
+);
+
+alter table public.mastery_refresh_runs enable row level security;
+
+create index if not exists mastery_refresh_runs_started_idx
+  on public.mastery_refresh_runs (started_at desc);
+
+create or replace function public.get_mastery_refresh_status()
+returns table (
+  status text,
+  started_at timestamptz,
+  finished_at timestamptz,
+  users_total integer,
+  failed integer
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select r.status, r.started_at, r.finished_at, r.users_total, r.failed
+  from public.mastery_refresh_runs r
+  order by r.started_at desc
+  limit 1;
+$$;
+
+revoke all on function public.get_mastery_refresh_status() from public, anon;
+grant execute on function public.get_mastery_refresh_status() to authenticated;
+
+create or replace function public.record_overall_mastery_history()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'UPDATE'
+     and new.overall_mastery_score is not null
+     and new.overall_mastery_score > 0
+     and abs(new.overall_mastery_score - coalesce(old.overall_mastery_score, 0)) >= 0.05 then
+    insert into public.mastery_score_history (user_id, overall_mastery_score)
+    values (new.id, new.overall_mastery_score);
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.record_overall_mastery_history() from public, anon, authenticated;
+
+drop trigger if exists profiles_record_overall_mastery_history on public.profiles;
+create trigger profiles_record_overall_mastery_history
+  after update of overall_mastery_score on public.profiles
+  for each row
+  execute function public.record_overall_mastery_history();
 
 -- ---------- Xbox Live / PSN OAuth tokens (real Gamerscore/trophy sync) ----------
 -- Applied in production via add_xbox_psn_oauth_tokens migration;
